@@ -23,6 +23,7 @@ public partial class RulesViewModel : ObservableObject
         get => S.ThresholdPercent;
         set
         {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return;
             var v = Math.Clamp(value, 40, 95);
             if (S.ThresholdPercent == v) return;
             S.ThresholdPercent = v;
@@ -35,6 +36,7 @@ public partial class RulesViewModel : ObservableObject
         get => S.SustainSeconds;
         set
         {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return;
             var v = (int)Math.Clamp(value, 10, 300);
             if (S.SustainSeconds == v) return;
             S.SustainSeconds = v;
@@ -53,6 +55,7 @@ public partial class RulesViewModel : ObservableObject
         get => S.TimerIntervalMinutes;
         set
         {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return;
             var v = (int)Math.Clamp(value, 1, 1440);
             if (S.TimerIntervalMinutes == v) return;
             S.TimerIntervalMinutes = v;
