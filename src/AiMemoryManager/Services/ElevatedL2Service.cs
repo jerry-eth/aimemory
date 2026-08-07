@@ -58,9 +58,13 @@ public class ElevatedL2Service : IL2Executor
                 try
                 {
                     using var doc = JsonDocument.Parse(File.ReadAllText(_resultPath));
+                    int status = doc.RootElement.GetProperty("status").GetInt32();
+                    if (status != 0)
+                        throw new InvalidOperationException($"L2 清理失败,helper status={status}(NTSTATUS,可能特权未生效)");
                     return doc.RootElement.GetProperty("freedBytes").GetInt64();
                 }
                 catch (IOException) { /* 文件尚在写入,继续等 */ }
+                catch (JsonException) { /* 读到未写完的部分 JSON,继续等 */ }
             }
             await Task.Delay(100, ct);
         }

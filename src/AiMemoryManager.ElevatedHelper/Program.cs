@@ -12,11 +12,16 @@ class Program
     [DllImport("ntdll.dll")] static extern int NtSetSystemInformation(int InfoClass, ref int Info, int Length);
     [DllImport("ntdll.dll")] static extern int NtQuerySystemInformation(int InfoClass, ref SYSTEM_PERFORMANCE_INFORMATION Info, int Length, out int ReturnLength);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr h, int access, out IntPtr token);
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool LookupPrivilegeValue(string? sys, string name, out long luid);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool LookupPrivilegeValue(string? sys, string name, out LUID luid);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool AdjustTokenPrivileges(IntPtr token, bool disableAll, ref TOKEN_PRIVILEGES tp, int len, IntPtr prev, IntPtr retLen);
 
+    // LUID 为 8 字节、对齐 4;拆成两个 32 位字段,保证托管布局与原生一致(原生 LUID 紧跟在 int 后,偏移 4)。
     [StructLayout(LayoutKind.Sequential)]
-    struct TOKEN_PRIVILEGES { public int Count; public long Luid; public int Attr; }
+    struct LUID { public uint LowPart; public int HighPart; }
+
+    // 原生 TOKEN_PRIVILEGES:LUID 对齐 4 位于偏移 4;若用 long(对齐 8)会被填到偏移 8,结构错位导致 AdjustTokenPrivileges 读到错误 LUID。
+    [StructLayout(LayoutKind.Sequential)]
+    struct TOKEN_PRIVILEGES { public int Count; public uint LuidLow; public int LuidHigh; public int Attr; }
 
     // 已实测校验(见 task-6 报告):AvailablePages 偏移 = 44(4 个 long=32 + 3 个 int=12),
     // 读取值 × 页大小与 GlobalMemoryStatusEx 的 AvailPhys 完全一致(比值 1.000)。
@@ -103,9 +108,16 @@ class Program
 
     static void EnablePrivilege(string name)
     {
-        OpenProcessToken(Process.GetCurrentProcess().Handle, 0x0020 | 0x0008, out var token);
-        LookupPrivilegeValue(null, name, out long luid);
-        var tp = new TOKEN_PRIVILEGES { Count = 1, Luid = luid, Attr = 0x00000002 /*SE_PRIVILEGE_ENABLED*/ };
-        AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+        if (!OpenProcessToken(Process.GetCurrentProcess().Handle, 0x0020 | 0x0008, out var token))
+            Console.Error.WriteLine($"EnablePrivilege: OpenProcessToken 失败,Win32Error={Marshal.GetLastWin32Error()}");
+        if (!LookupPrivilegeValue(null, name, out LUID luid))
+            Console.Error.WriteLine($"EnablePrivilege: LookupPrivilegeValue({name}) 失败,Win32Error={Marshal.GetLastWin32Error()}");
+        var tp = new TOKEN_PRIVILEGES { Count = 1, LuidLow = luid.LowPart, LuidHigh = luid.HighPart, Attr = 0x00000002 /*SE_PRIVILEGE_ENABLED*/ };
+        // AdjustTokenPrivileges 即使返回 true,也可能未实际赋予特权(ERROR_NOT_ALL_ASSIGNED=1300),必须检查 LastError
+        bool ok = AdjustTokenPrivileges(token, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+        int err = Marshal.GetLastWin32Error();
+        if (!ok || err != 0)
+            Console.Error.WriteLine($"EnablePrivilege: AdjustTokenPrivileges({name}) 未生效,ok={ok},Win32Error={err}" +
+                (err == 1300 ? "(ERROR_NOT_ALL_ASSIGNED:令牌不持有该特权)" : ""));
     }
 }
