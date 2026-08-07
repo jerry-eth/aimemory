@@ -2,10 +2,123 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.TokenStats], Source={x:Static services:Locator.L10n}}">
-    <Grid>
-        <TextBlock Text="{Binding [Nav.TokenStats], Source={x:Static services:Locator.L10n}}"
-                   FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-    </Grid>
+    <Page.DataContext>
+        <vm:TokenStatsViewModel/>
+    </Page.DataContext>
+    <Page.Resources>
+        <!-- WPF-UI 4.3.0 不为原生 DataGrid 提供主题,沿用 ProcessesPage 的最低限度适配 -->
+        <Style x:Key="StatsGridHeader" TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+        <Style x:Key="StatsGrid" TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="Background" Value="{x:Null}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="RowBackground" Value="{x:Null}"/>
+            <Setter Property="AlternatingRowBackground" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}"/>
+            <Setter Property="ColumnHeaderStyle" Value="{StaticResource StatsGridHeader}"/>
+        </Style>
+    </Page.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            <ui:Button Content="{Binding [Processes.Refresh], Source={x:Static services:Locator.L10n}}"
+                       Command="{Binding RefreshCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
+            <!-- 三聚合卡:今日/本周/本月 -->
+            <UniformGrid Columns="3" Margin="0,4">
+                <ui:Card Margin="0,0,8,0">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="{Binding [Tokens.Today], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{Binding TodayText}" FontSize="14" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </ui:Card>
+                <ui:Card Margin="4,0">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="{Binding [Tokens.Week], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{Binding WeekText}" FontSize="14" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </ui:Card>
+                <ui:Card Margin="8,0,0,0">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="{Binding [Tokens.Month], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{Binding MonthText}" FontSize="14" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </ui:Card>
+            </UniformGrid>
+            <!-- 费用卡 + 预算告警 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Tokens.Cost], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock Text="{Binding CostText}" FontSize="24" FontWeight="SemiBold"/>
+                    <ui:InfoBar Severity="Warning" IsClosable="False" Margin="0,8,0,0"
+                                IsOpen="{Binding BudgetHit}"
+                                Message="{Binding [Tokens.BudgetHit], Source={x:Static services:Locator.L10n}}"/>
+                </StackPanel>
+            </ui:Card>
+            <!-- 按档案统计表 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Tokens.ByProfile], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <DataGrid Style="{StaticResource StatsGrid}" ItemsSource="{Binding ByProfile}" Margin="0,8,0,0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="{Binding [Tokens.Col.Profile], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding Profile}" Width="2*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Input], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding InputText}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Output], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding OutputText}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Calls], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding CallsText}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Cost], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding CostText}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </ui:Card>
+            <!-- 最近调用表(最多 50 条,新在前) -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Tokens.Recent], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <DataGrid Style="{StaticResource StatsGrid}" ItemsSource="{Binding Recent}"
+                              MaxHeight="400" Margin="0,8,0,0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="{Binding [Tokens.Col.Time], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding TimeText}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Col.Profile], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding Profile}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Col.Model], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding Model}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Input], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding InputText}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Output], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding OutputText}" Width="*"/>
+                            <DataGridTextColumn Header="{Binding [Tokens.Col.Trigger], Source={x:Static services:Locator.L10n}}"
+                                                Binding="{Binding TriggerText}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </ScrollViewer>
 </Page>
