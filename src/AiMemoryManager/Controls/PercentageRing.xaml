@@ -1,0 +1,12 @@
+<UserControl x:Class="AiMemoryManager.Controls.PercentageRing"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Path x:Name="Track" Stroke="{Binding TrackBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"
+              StrokeThickness="{Binding StrokeThickness, RelativeSource={RelativeSource AncestorType=UserControl}}"
+              Fill="None" Opacity="0.2"/>
+        <Path x:Name="Arc" Stroke="{Binding RingBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"
+              StrokeThickness="{Binding StrokeThickness, RelativeSource={RelativeSource AncestorType=UserControl}}"
+              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="None"/>
+    </Grid>
+</UserControl>
