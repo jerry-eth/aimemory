@@ -50,6 +50,8 @@ public partial class ProcessesViewModel : ObservableObject
         if (item == null || item.IsCritical || item.IsExcluded) return;
         Locator.Whitelist.Add(item.Name);
         item.IsExcluded = true;
+        // 右键菜单对同一行重复打开时绑定不会重估,需主动刷新命令可用态
+        AddToWhitelistCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>系统关键进程与已加白进程禁用右键菜单项。</summary>
