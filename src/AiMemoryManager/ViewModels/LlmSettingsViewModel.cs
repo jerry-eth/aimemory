@@ -102,29 +102,40 @@ public partial class LlmSettingsViewModel : ObservableObject
     [RelayCommand]
     private void SaveProfile()
     {
+        var isNew = string.IsNullOrEmpty(EditId);
+        // 新增态密钥必填;编辑态留空 = 保留原密钥
         if (string.IsNullOrWhiteSpace(EditName) ||
             string.IsNullOrWhiteSpace(EditBaseUrl) ||
-            string.IsNullOrWhiteSpace(EditModel))
+            string.IsNullOrWhiteSpace(EditModel) ||
+            (isNew && string.IsNullOrEmpty(EditApiKey)))
         {
             TestResult = Locator.L10n["Llm.Incomplete"];
             return;
         }
-        var id = string.IsNullOrEmpty(EditId) ? Guid.NewGuid().ToString("N") : EditId;
-        // ApiKey 非空 → DPAPI 加密;空且编辑态 → 保留原 EncryptedApiKey
-        var encrypted = !string.IsNullOrEmpty(EditApiKey)
-            ? SecretProtector.Protect(EditApiKey)
-            : Locator.Profiles.Profiles.FirstOrDefault(p => p.Id == id)?.EncryptedApiKey ?? "";
-        Locator.Profiles.Save(new LlmProfile
+        try
         {
-            Id = id,
-            Name = EditName.Trim(),
-            BaseUrl = EditBaseUrl.Trim(),
-            EncryptedApiKey = encrypted,
-            Model = EditModel.Trim(),
-            PricePerMillionTokens = EditPrice
-        });
-        EditApiKey = "";          // 明文用完即清
-        Refresh();
+            var id = isNew ? Guid.NewGuid().ToString("N") : EditId;
+            // ApiKey 非空 → DPAPI 加密;空且编辑态 → 保留原 EncryptedApiKey
+            var encrypted = !string.IsNullOrEmpty(EditApiKey)
+                ? SecretProtector.Protect(EditApiKey)
+                : Locator.Profiles.Profiles.FirstOrDefault(p => p.Id == id)?.EncryptedApiKey ?? "";
+            Locator.Profiles.Save(new LlmProfile
+            {
+                Id = id,
+                Name = EditName.Trim(),
+                BaseUrl = EditBaseUrl.Trim(),
+                EncryptedApiKey = encrypted,
+                Model = EditModel.Trim(),
+                PricePerMillionTokens = EditPrice
+            });
+            EditId = id;            // 首次保存后回写,再次保存为更新而非新增重复档案
+            EditApiKey = "";        // 明文用完即清
+            Refresh();
+        }
+        catch (Exception ex)
+        {
+            TestResult = string.Format(Locator.L10n["Llm.SaveFail"], ex.Message);
+        }
     }
 
     [RelayCommand]
