@@ -18,20 +18,25 @@ public static class AnalysisResultParser
             var list = new List<AnalysisSuggestion>();
             foreach (var item in arr.EnumerateArray())
             {
-                if (!item.TryGetProperty("process", out var pn) || pn.GetString() is not { Length: > 0 } name) continue;
-                string action = item.TryGetProperty("action", out var a) ? a.GetString() ?? "" : "";
-                string reason = item.TryGetProperty("reason", out var r) ? r.GetString() ?? "" : "";
-                string risk = item.TryGetProperty("risk", out var rk) ? rk.GetString() ?? "" : "";
-                list.Add(new AnalysisSuggestion(name, NormAction(action), reason, NormRisk(risk)));
+                try
+                {
+                    if (!item.TryGetProperty("process", out var pn) || pn.ValueKind != JsonValueKind.String
+                        || pn.GetString() is not { Length: > 0 } name) continue;
+                    string action = item.TryGetProperty("action", out var a) && a.ValueKind == JsonValueKind.String ? a.GetString() ?? "" : "";
+                    string reason = item.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() ?? "" : "";
+                    string risk = item.TryGetProperty("risk", out var rk) && rk.ValueKind == JsonValueKind.String ? rk.GetString() ?? "" : "";
+                    list.Add(new AnalysisSuggestion(name, NormAction(action), reason, NormRisk(risk)));
+                }
+                catch { continue; }
             }
             return list;
         }
         catch { return Array.Empty<AnalysisSuggestion>(); }
     }
 
-    private static string NormAction(string a) => a.ToLowerInvariant() switch
+    private static string NormAction(string a) => a.Trim().ToLowerInvariant() switch
     { "compress" => "compress", "terminate" => "terminate", "keep" => "keep", _ => "keep" };
 
-    private static string NormRisk(string r) => r.ToLowerInvariant() switch
+    private static string NormRisk(string r) => r.Trim().ToLowerInvariant() switch
     { "low" => "low", "medium" => "medium", "high" => "high", _ => "medium" };
 }

@@ -44,4 +44,19 @@ public class AnalysisResultParserTests
         Assert.Single(r);
         Assert.Equal("b", r[0].ProcessName);
     }
+
+    [Fact] public void 类型错误的条目被跳过且其余保留()
+    {
+        var r = AnalysisResultParser.Parse("""{"suggestions":[{"process":123,"action":"compress"},{"process":"b","action":"compress","reason":"ok","risk":"low"}]}""");
+        Assert.Single(r);
+        Assert.Equal("b", r[0].ProcessName);
+    }
+
+    [Fact] public void action与risk带空白时归一化()
+    {
+        var r = AnalysisResultParser.Parse("""{"suggestions":[{"process":"a","action":" COMPRESS ","reason":"r","risk":" HIGH "}]}""");
+        Assert.Single(r);
+        Assert.Equal("compress", r[0].Action);
+        Assert.Equal("high", r[0].Risk);
+    }
 }
