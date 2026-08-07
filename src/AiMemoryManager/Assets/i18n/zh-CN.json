@@ -5,6 +5,7 @@
   "Dashboard.UsedMemory": "内存占用", "Dashboard.Total": "总计",
   "Dashboard.Available": "可用", "Dashboard.CleanL1": "一键清理",
   "Dashboard.CleanL2": "深度清理(需管理员)", "Dashboard.LastClean": "上次清理释放 {0} MB",
+  "Dashboard.Used": "已用", "Dashboard.L2Failed": "深度清理暂不可用:{0}",
   "Processes.Col.Name": "进程", "Processes.Col.Memory": "内存", "Processes.Col.Path": "路径",
   "Processes.AddWhitelist": "加入白名单",
   "Rules.Threshold": "内存超过", "Rules.ThresholdSuffix": "% 持续",

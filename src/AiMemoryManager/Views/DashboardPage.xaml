@@ -1,10 +1,70 @@
-﻿<Page x:Class="AiMemoryManager.Views.DashboardPage"
-      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      xmlns:services="clr-namespace:AiMemoryManager.Services"
-      Title="{Binding [Nav.Dashboard], Source={x:Static services:Locator.L10n}}">
-    <Grid>
-        <TextBlock Text="{Binding [Nav.Dashboard], Source={x:Static services:Locator.L10n}}"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
-    </Grid>
+<Page x:Class="AiMemoryManager.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:AiMemoryManager.Controls"
+    xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
+    xmlns:services="clr-namespace:AiMemoryManager.Services">
+    <Page.DataContext>
+        <vm:DashboardViewModel/>
+    </Page.DataContext>
+    <StackPanel Margin="24">
+        <!-- 英雄区:大圆环 + 主操作 -->
+        <Grid Margin="0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid Width="180" Height="180">
+                <c:PercentageRing Percent="{Binding Percent}" StrokeThickness="12"
+                                  RingBrush="{DynamicResource SystemFillColorAttentionBrush}"
+                                  TrackBrush="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Percent, StringFormat=F0}" FontSize="40"
+                               FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding [Dashboard.UsedMemory], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+            <!-- AsyncRelayCommand 执行期间 CanExecute 自动为 false,按钮自动禁用,无需 InverseBool 转换器 -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="32,0,0,0">
+                <ui:Button Content="{Binding [Dashboard.CleanL1], Source={x:Static services:Locator.L10n}}"
+                           Appearance="Primary" Command="{Binding CleanL1Command}"
+                           Width="200" Height="40"/>
+                <ui:Button Content="{Binding [Dashboard.CleanL2], Source={x:Static services:Locator.L10n}}"
+                           Command="{Binding CleanL2Command}" Margin="0,12,0,0" Width="200"/>
+                <TextBlock Text="{Binding LastCleanText}" Margin="0,12,0,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+        </Grid>
+        <!-- 信息卡片行 -->
+        <UniformGrid Columns="3" Margin="0,12">
+            <ui:Card Margin="0,0,8,0">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Dashboard.Total], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock Text="{Binding TotalText}" FontSize="24" FontWeight="SemiBold"/>
+                </StackPanel>
+            </ui:Card>
+            <ui:Card Margin="4,0">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Dashboard.Available], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock Text="{Binding AvailableText}" FontSize="24" FontWeight="SemiBold"/>
+                </StackPanel>
+            </ui:Card>
+            <ui:Card Margin="8,0,0,0">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Dashboard.Used], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock Text="{Binding UsedText}" FontSize="24" FontWeight="SemiBold"/>
+                </StackPanel>
+            </ui:Card>
+        </UniformGrid>
+        <!-- 迷你曲线(最近 5 分钟,150 个采样点) -->
+        <ui:Card Margin="0,4">
+            <Polyline x:Name="MiniChart" Height="60" Stretch="Fill" Margin="16"
+                      Stroke="{DynamicResource SystemFillColorAttentionBrush}" StrokeThickness="2"/>
+        </ui:Card>
+    </StackPanel>
 </Page>

@@ -1,12 +1,13 @@
 <UserControl x:Class="AiMemoryManager.Controls.PercentageRing"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        注意:.NET 8 WPF 会把 Fill="None" 编译成损坏的 SolidColorBrush BAML 记录
+        (运行时 Brush.Parse FormatException),必须用 {x:Null}。
+        Brush 依赖属性不走 XAML 绑定,由 code-behind 的 Redraw() 直接赋值。
+    -->
     <Grid>
-        <Path x:Name="Track" Stroke="{Binding TrackBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"
-              StrokeThickness="{Binding StrokeThickness, RelativeSource={RelativeSource AncestorType=UserControl}}"
-              Fill="None" Opacity="0.2"/>
-        <Path x:Name="Arc" Stroke="{Binding RingBrush, RelativeSource={RelativeSource AncestorType=UserControl}}"
-              StrokeThickness="{Binding StrokeThickness, RelativeSource={RelativeSource AncestorType=UserControl}}"
-              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="None"/>
+        <Path x:Name="Track" Fill="{x:Null}" Opacity="0.2"/>
+        <Path x:Name="Arc" Fill="{x:Null}" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
     </Grid>
 </UserControl>

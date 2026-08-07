@@ -28,6 +28,12 @@ public partial class PercentageRing : UserControl
 
     private void Redraw()
     {
+        // 画刷/粗细不走 XAML 绑定(见 XAML 注释),每次重绘时同步一次
+        Track.Stroke = TrackBrush;
+        Track.StrokeThickness = StrokeThickness;
+        Arc.Stroke = RingBrush;
+        Arc.StrokeThickness = StrokeThickness;
+
         double size = Math.Min(ActualWidth, ActualHeight);
         if (size <= StrokeThickness) return;
         double r = (size - StrokeThickness) / 2;
