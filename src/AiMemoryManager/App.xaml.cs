@@ -21,13 +21,22 @@ public partial class App : Application
         Locator.Monitor.Start();
 
         _ruleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(RuleEngine.TickIntervalSeconds) };
-        _ruleTimer.Tick += (_, _) => Locator.Rules.Tick();
+        _ruleTimer.Tick += (_, _) =>
+        {
+            try { Locator.Rules.Tick(); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Rules] Tick failed: {ex}"); }
+        };
         _ruleTimer.Start();
 
         Locator.Rules.CleanRequested += async (_, req) =>
         {
-            if (req.Level == Models.CleanLevel.L2) await Locator.Clean.RunL2Async(req.Trigger);
-            else await Locator.Clean.RunL1Async(req.Trigger);
+            // async void 事件处理器:清理失败(如 L2 助手缺失/UAC 取消)不能拖垮整个应用
+            try
+            {
+                if (req.Level == Models.CleanLevel.L2) await Locator.Clean.RunL2Async(req.Trigger);
+                else await Locator.Clean.RunL1Async(req.Trigger);
+            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Rules] Auto clean failed: {ex}"); }
         };
 
         base.OnStartup(e);

@@ -55,10 +55,19 @@ public partial class MainWindow : FluentWindow
 
     private async void OnTrayClean(object sender, RoutedEventArgs e)
     {
-        var r = await Locator.Clean.RunL1Async(CleanTrigger.Tray);
-        Tray.ShowNotification(Locator.L10n["App.Title"],
-            string.Format(Locator.L10n["Clean.Done"], r.FreedBytes / (1 << 20)),
-            H.NotifyIcon.Core.NotificationIcon.Info);
+        // async void 事件处理器:必须自吞异常,否则清理失败会直接崩溃进程
+        try
+        {
+            var r = await Locator.Clean.RunL1Async(CleanTrigger.Tray);
+            Tray.ShowNotification(Locator.L10n["App.Title"],
+                string.Format(Locator.L10n["Clean.Done"], r.FreedBytes / (1 << 20)),
+                H.NotifyIcon.Core.NotificationIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            Tray.ShowNotification(Locator.L10n["App.Title"], ex.Message,
+                H.NotifyIcon.Core.NotificationIcon.Error);
+        }
     }
 
     private void OnTrayExit(object sender, RoutedEventArgs e)

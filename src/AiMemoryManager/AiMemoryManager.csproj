@@ -21,4 +21,13 @@
     <None Update="Assets\i18n\*.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></None>
   </ItemGroup>
 
+  <!-- 提权助手:不引用程序集,仅把产物(含 exe)复制到主程序输出目录,供 ElevatedL2Service 启动 -->
+  <ItemGroup>
+    <ProjectReference Include="..\AiMemoryManager.ElevatedHelper\AiMemoryManager.ElevatedHelper.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <OutputItemType>Content</OutputItemType>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </ProjectReference>
+  </ItemGroup>
+
 </Project>

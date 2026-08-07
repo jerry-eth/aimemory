@@ -5,7 +5,7 @@
   "Dashboard.UsedMemory": "Memory Used", "Dashboard.Total": "Total",
   "Dashboard.Available": "Available", "Dashboard.CleanL1": "Clean Now",
   "Dashboard.CleanL2": "Deep Clean (admin)", "Dashboard.LastClean": "Last clean freed {0} MB",
-  "Dashboard.Used": "Used", "Dashboard.L2Failed": "Deep clean unavailable: {0}",
+  "Dashboard.Used": "Used", "Dashboard.L2Failed": "Deep clean needs one-time admin approval; it won't ask again ({0})",
   "Processes.Col.Name": "Process", "Processes.Col.Memory": "Memory", "Processes.Col.Path": "Path",
   "Processes.Col.Whitelist": "Whitelisted", "Processes.Refresh": "Refresh",
   "Processes.AddWhitelist": "Add to Whitelist",
