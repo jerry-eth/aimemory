@@ -1,0 +1,20 @@
+{
+  "App.Title": "AI Memory Manager",
+  "Nav.Dashboard": "Dashboard", "Nav.Processes": "Processes", "Nav.Rules": "Rules",
+  "Nav.Whitelist": "Whitelist", "Nav.Settings": "Settings",
+  "Dashboard.UsedMemory": "Memory Used", "Dashboard.Total": "Total",
+  "Dashboard.Available": "Available", "Dashboard.CleanL1": "Clean Now",
+  "Dashboard.CleanL2": "Deep Clean (admin)", "Dashboard.LastClean": "Last clean freed {0} MB",
+  "Processes.Col.Name": "Process", "Processes.Col.Memory": "Memory", "Processes.Col.Path": "Path",
+  "Processes.AddWhitelist": "Add to Whitelist",
+  "Rules.Threshold": "When memory exceeds", "Rules.ThresholdSuffix": "% for",
+  "Rules.SustainSuffix": "seconds, auto clean", "Rules.Timer": "Every",
+  "Rules.TimerSuffix": "minutes, auto clean", "Rules.IncludeL2": "Include deep clean in auto clean",
+  "Rules.NoFullscreen": "Pause auto clean during games/fullscreen",
+  "Whitelist.Empty": "No whitelist entries. Right-click a process to add.",
+  "Whitelist.Import": "Import", "Whitelist.Export": "Export", "Whitelist.Remove": "Remove",
+  "Settings.Language": "Language", "Settings.LangAuto": "Follow System",
+  "Settings.Animations": "UI Animations", "Settings.About": "About",
+  "Tray.Clean": "Clean Now", "Tray.Open": "Open Main Window", "Tray.Exit": "Exit",
+  "Clean.Done": "Clean complete, freed {0} MB"
+}

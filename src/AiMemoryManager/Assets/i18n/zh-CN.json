@@ -1,0 +1,20 @@
+{
+  "App.Title": "AI 内存管家",
+  "Nav.Dashboard": "仪表盘", "Nav.Processes": "进程", "Nav.Rules": "规则",
+  "Nav.Whitelist": "白名单", "Nav.Settings": "设置",
+  "Dashboard.UsedMemory": "内存占用", "Dashboard.Total": "总计",
+  "Dashboard.Available": "可用", "Dashboard.CleanL1": "一键清理",
+  "Dashboard.CleanL2": "深度清理(需管理员)", "Dashboard.LastClean": "上次清理释放 {0} MB",
+  "Processes.Col.Name": "进程", "Processes.Col.Memory": "内存", "Processes.Col.Path": "路径",
+  "Processes.AddWhitelist": "加入白名单",
+  "Rules.Threshold": "内存超过", "Rules.ThresholdSuffix": "% 持续",
+  "Rules.SustainSuffix": "秒时自动清理", "Rules.Timer": "每隔",
+  "Rules.TimerSuffix": "分钟自动清理", "Rules.IncludeL2": "自动清理包含深度清理",
+  "Rules.NoFullscreen": "游戏/全屏时暂停自动清理",
+  "Whitelist.Empty": "暂无白名单,可在进程页右键添加",
+  "Whitelist.Import": "导入", "Whitelist.Export": "导出", "Whitelist.Remove": "移除",
+  "Settings.Language": "语言", "Settings.LangAuto": "跟随系统",
+  "Settings.Animations": "界面动效", "Settings.About": "关于",
+  "Tray.Clean": "一键清理", "Tray.Open": "打开主界面", "Tray.Exit": "退出",
+  "Clean.Done": "清理完成,释放 {0} MB"
+}

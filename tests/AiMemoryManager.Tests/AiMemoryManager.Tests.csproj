@@ -25,4 +25,8 @@
     <ProjectReference Include="..\..\src\AiMemoryManager\AiMemoryManager.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="..\..\src\AiMemoryManager\Assets\i18n\*.json" CopyToOutputDirectory="PreserveNewest" Link="i18n\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
