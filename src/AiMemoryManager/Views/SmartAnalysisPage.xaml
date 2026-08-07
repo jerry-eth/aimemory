@@ -21,6 +21,11 @@
                     <ui:Button Content="{Binding [Analysis.Run], Source={x:Static services:Locator.L10n}}"
                                Appearance="Primary" Command="{Binding RunAnalysisCommand}"
                                Width="160" Height="40"/>
+                    <!-- 有结果后显示:跳过缓存重新请求 -->
+                    <ui:Button Content="{Binding [Analysis.ForceRefresh], Source={x:Static services:Locator.L10n}}"
+                               Appearance="Secondary" Command="{Binding ForceRefreshCommand}"
+                               Width="120" Height="40" Margin="8,0,0,0"
+                               Visibility="{Binding HasSuggestions, Converter={StaticResource BoolToVis}}"/>
                     <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
                         <TextBlock Text="{Binding StatusText}"/>
                         <TextBlock Text="{Binding UsageText}"
@@ -104,14 +109,22 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold"
+                                               VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="1" Margin="12,0,0,0"
+                                               VerticalAlignment="Center"
                                                Foreground="{DynamicResource SystemFillColorCriticalBrush}">
                                         <Run Text="+"/><Run Text="{Binding GrowthMb}"/><Run Text="MB"/>
                                     </TextBlock>
                                     <TextBlock Grid.Column="2" Margin="12,0,0,0" Text="{Binding TimeText}"
+                                               VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <!-- FR-11.2:泄漏告警一键分析(Leak 触发器,结果走既有填充路径) -->
+                                    <ui:Button Grid.Column="3" Margin="12,0,0,0"
+                                               Content="{Binding [Leak.Analyze], Source={x:Static services:Locator.L10n}}"
+                                               Command="{Binding DataContext.AnalyzeLeakCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

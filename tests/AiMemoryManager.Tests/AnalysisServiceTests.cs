@@ -24,11 +24,12 @@ public class AnalysisServiceTests : IDisposable
     {
         public int Calls;
         public string LastUserPrompt = "";
+        public string LastSystemPrompt = "";
         // 偏差说明:brief 的原始字符串跨行写法不是合法 C#(多行 raw string 的 """ 必须独占行),
         // 改为单行 raw string,JSON 内容逐字不变。
         public string Reply = """{"suggestions":[{"process":"chrome","action":"compress","reason":"占用高","risk":"low"},{"process":"csrss","action":"compress","reason":"模型瞎说","risk":"low"},{"process":"myapp","action":"compress","reason":"白名单内","risk":"low"}]}""";
         public Task<LlmResponse> ChatAsync(LlmProfile profile, string systemPrompt, string userPrompt, CancellationToken ct = default)
-        { Calls++; LastUserPrompt = userPrompt; return Task.FromResult(new LlmResponse(Reply, new LlmUsage(100, 50))); }
+        { Calls++; LastSystemPrompt = systemPrompt; LastUserPrompt = userPrompt; return Task.FromResult(new LlmResponse(Reply, new LlmUsage(100, 50))); }
         public Task<IReadOnlyList<string>> ListModelsAsync(LlmProfile profile, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<string>>(new[] { "m1" });
     }
@@ -119,5 +120,42 @@ public class AnalysisServiceTests : IDisposable
         _svc.AnalysisCompleted += (_, r) => got = r;
         await _svc.AnalyzeAsync(AnalysisTrigger.Manual);
         Assert.NotNull(got);
+    }
+
+    [Fact] public async Task 系统提示词占位符被替换()
+    {
+        _prompts.Save(new PromptTemplate
+        {
+            Id = "custom", Name = "c", IsDefault = true,
+            Content = "mem={memory_info}|custom={custom_instructions}|lang={language}|{process_list}"
+        });
+        _settings.Current.CustomInstructions = "别动游戏";
+        await _svc.AnalyzeAsync(AnalysisTrigger.Manual);
+        Assert.DoesNotContain("{memory_info}", _client.LastSystemPrompt);
+        Assert.DoesNotContain("{process_list}", _client.LastSystemPrompt);
+        Assert.DoesNotContain("{custom_instructions}", _client.LastSystemPrompt);
+        Assert.DoesNotContain("{language}", _client.LastSystemPrompt);
+        Assert.Contains("别动游戏", _client.LastSystemPrompt);
+        Assert.Contains("chrome", _client.LastSystemPrompt);      // 进程 JSON 已注入系统提示词
+        Assert.Contains("lang=中文", _client.LastSystemPrompt);
+    }
+
+    [Fact] public async Task forceRefresh跳过缓存重新调LLM但仍写缓存()
+    {
+        await _svc.AnalyzeAsync(AnalysisTrigger.Manual);
+        var r2 = await _svc.AnalyzeAsync(AnalysisTrigger.Manual, forceRefresh: true);
+        Assert.Equal(2, _client.Calls);                            // 缓存被跳过
+        Assert.False(r2.FromCache);
+        var r3 = await _svc.AnalyzeAsync(AnalysisTrigger.Manual);  // 写入了缓存,普通调用复用
+        Assert.Equal(2, _client.Calls);
+        Assert.True(r3.FromCache);
+    }
+
+    [Fact] public async Task 自定义指令变化使缓存失效()
+    {
+        await _svc.AnalyzeAsync(AnalysisTrigger.Manual);
+        _settings.Current.CustomInstructions = "别动游戏";
+        await _svc.AnalyzeAsync(AnalysisTrigger.Manual);
+        Assert.Equal(2, _client.Calls);                            // 指令变化 → 哈希变化 → 重新请求
     }
 }

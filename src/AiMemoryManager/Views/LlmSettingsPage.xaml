@@ -170,6 +170,36 @@
                     </StackPanel>
                 </StackPanel>
             </ui:Card>
+            <!-- 泄漏检测卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Leak.Settings], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding [Leak.Enabled], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding LeakDetectionEnabled}"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding [Leak.ThresholdMb], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ui:NumberBox Value="{Binding LeakGrowthThresholdMb, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="50" Maximum="10000" SmallChange="50" LargeChange="200"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding [Leak.WindowMin], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ui:NumberBox Value="{Binding LeakWindowMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="5" Maximum="120" SmallChange="5" LargeChange="15"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
             <!-- 提示词模板卡 -->
             <ui:Card Margin="0,4">
                 <StackPanel Margin="16">

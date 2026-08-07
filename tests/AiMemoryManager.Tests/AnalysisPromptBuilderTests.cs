@@ -39,8 +39,43 @@ public class AnalysisPromptBuilderTests
         var a = Snapshots(3);
         var b = Snapshots(3).Select(p => p with { WorkingSetBytes = p.WorkingSetBytes + (1L << 20) }).ToList(); // +1MB 同桶
         var c = Snapshots(3).Select(p => p with { WorkingSetBytes = p.WorkingSetBytes + (64L << 20) }).ToList(); // +64MB 跨桶
-        Assert.Equal(AnalysisPromptBuilder.SnapshotHash(a, "m", "t"), AnalysisPromptBuilder.SnapshotHash(b, "m", "t"));
-        Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t"), AnalysisPromptBuilder.SnapshotHash(c, "m", "t"));
-        Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t"), AnalysisPromptBuilder.SnapshotHash(a, "m2", "t"));
+        Assert.Equal(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"), AnalysisPromptBuilder.SnapshotHash(b, "m", "t", "", "中文"));
+        Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"), AnalysisPromptBuilder.SnapshotHash(c, "m", "t", "", "中文"));
+        Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"), AnalysisPromptBuilder.SnapshotHash(a, "m2", "t", "", "中文"));
+    }
+
+    [Fact] public void 快照哈希纳入自定义指令与语言()
+    {
+        var a = Snapshots(3);
+        Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "别动游戏", "中文"),
+                        AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"));
+        Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"),
+                        AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "English"));
+    }
+
+    [Fact] public void 模板占位符被替换为实际片段()
+    {
+        var f = AnalysisPromptBuilder.BuildFragments(
+            Snapshots(2), new SystemMemoryInfo(16L << 30, 4L << 30), "别动我的游戏", "中文");
+        var rendered = AnalysisPromptBuilder.RenderTemplate(
+            "mem={memory_info}; procs={process_list}; custom={custom_instructions}; lang={language}", f);
+        Assert.DoesNotContain("{memory_info}", rendered);
+        Assert.DoesNotContain("{process_list}", rendered);
+        Assert.DoesNotContain("{custom_instructions}", rendered);
+        Assert.DoesNotContain("{language}", rendered);
+        Assert.Contains("75", rendered);                 // 内存信息
+        Assert.Contains("\"name\":\"proc2\"", rendered); // 进程 JSON
+        Assert.Contains("别动我的游戏", rendered);
+        Assert.Contains("lang=中文", rendered);
+    }
+
+    [Fact] public void 片段与用户提示词内容一致()
+    {
+        var f = AnalysisPromptBuilder.BuildFragments(
+            Snapshots(2), new SystemMemoryInfo(16L << 30, 4L << 30), "x", "中文");
+        var prompt = AnalysisPromptBuilder.BuildUserPrompt(
+            Snapshots(2), new SystemMemoryInfo(16L << 30, 4L << 30), "x", "中文");
+        Assert.Contains(f.MemoryInfo, prompt);
+        Assert.Contains(f.ProcessListJson, prompt);
     }
 }

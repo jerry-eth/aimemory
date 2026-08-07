@@ -35,6 +35,7 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _usageText = "";
     [ObservableProperty] private bool _hasProfile;
     [ObservableProperty] private bool _hasLeakAlerts;
+    [ObservableProperty] private bool _hasSuggestions;
 
     public SmartAnalysisViewModel()
     {
@@ -52,20 +53,51 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         Suggestions.Clear();
         foreach (var s in r.Suggestions)
             Suggestions.Add(new SuggestionItemViewModel { Suggestion = s });
+        HasSuggestions = Suggestions.Count > 0;
         UsageText = string.Format(Locator.L10n["Analysis.Usage"], r.Usage.InputTokens, r.Usage.OutputTokens)
                   + (r.FromCache ? " " + Locator.L10n["Analysis.FromCache"] : "");
         StatusText = string.Format(Locator.L10n["Analysis.LastRun"], r.Time.ToLocalTime().ToString("HH:mm:ss"));
         RefreshLeakAlerts();
     }
 
-    [RelayCommand]
-    private async Task RunAnalysisAsync()
+    /// <summary>手动触发前置检查:档案存在 + 未达月度预算(超预算手动分析被拦并给出可见提示)。</summary>
+    private bool PrecheckManual()
     {
         HasProfile = Locator.Profiles.GetActive() is not null;
-        if (!HasProfile) { StatusText = Locator.L10n["Analysis.NoProfile"]; return; }
+        if (!HasProfile) { StatusText = Locator.L10n["Analysis.NoProfile"]; return false; }
+        var budget = Locator.Settings.Current.MonthlyTokenBudget;
+        if (budget > 0 && !Locator.TokenStats.IsAutoTriggerAllowed(budget))
+        {
+            StatusText = Locator.L10n["Tokens.BudgetHit"];
+            return false;
+        }
+        return true;
+    }
+
+    [RelayCommand]
+    private Task RunAnalysisAsync() => RunAsync(forceRefresh: false);
+
+    [RelayCommand]
+    private Task ForceRefreshAsync() => RunAsync(forceRefresh: true);
+
+    private async Task RunAsync(bool forceRefresh)
+    {
+        if (!PrecheckManual()) return;
         IsAnalyzing = true;
         StatusText = Locator.L10n["Analysis.Running"];
-        try { await Locator.Analysis.AnalyzeAsync(AnalysisTrigger.Manual); }
+        try { await Locator.Analysis.AnalyzeAsync(AnalysisTrigger.Manual, forceRefresh); }
+        catch (Exception ex) { StatusText = ex.Message; }
+        finally { IsAnalyzing = false; }
+    }
+
+    /// <summary>泄漏告警行内"智能分析":以 Leak 触发器发起分析,结果走既有 AnalysisCompleted 填充路径。</summary>
+    [RelayCommand]
+    private async Task AnalyzeLeakAsync()
+    {
+        if (!PrecheckManual()) return;
+        IsAnalyzing = true;
+        StatusText = Locator.L10n["Analysis.Running"];
+        try { await Locator.Analysis.AnalyzeAsync(AnalysisTrigger.Leak); }
         catch (Exception ex) { StatusText = ex.Message; }
         finally { IsAnalyzing = false; }
     }

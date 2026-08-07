@@ -39,7 +39,9 @@ public partial class TokenStatsViewModel : ObservableObject
         MonthText = Format(stats.AggregateMonth());
 
         var all = stats.LoadAll();
-        var prices = Locator.Profiles.Profiles.ToDictionary(p => p.Name, p => p.PricePerMillionTokens);
+        var prices = Locator.Profiles.Profiles
+            .GroupBy(p => p.Name)                      // 同名档案(历史遗留)取第一个,不崩
+            .ToDictionary(g => g.Key, g => g.First().PricePerMillionTokens);
 
         // 费用:各档案单价 × 该档案本月累计(缺价按 0)
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset);

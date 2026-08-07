@@ -50,7 +50,9 @@ public static class Locator
         AnalysisCache = new AnalysisCacheService(AnalysisCacheService.DefaultPath(), () => DateTimeOffset.Now);
         Analysis = new AnalysisService(Native, Whitelist, Guard, Profiles, Prompts, LlmClient,
             AnalysisCache, TokenStats, Settings, L10n);
-        Scheduler = new AnalysisScheduler(Settings, Native, Analysis.AnalyzeAsync, TokenStats, () => DateTimeOffset.Now);
+        // 自动触发走默认参数(forceRefresh=false),显式 lambda 匹配委托签名
+        Scheduler = new AnalysisScheduler(Settings, Native,
+            (t, ct) => Analysis.AnalyzeAsync(t, false, ct), TokenStats, () => DateTimeOffset.Now);
         LeakDetection = new LeakDetectionService(Settings, () => DateTimeOffset.Now);
     }
 }

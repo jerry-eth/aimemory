@@ -74,6 +74,16 @@ public class LeakDetectionServiceTests : IDisposable
         Assert.Empty(_alerts);
     }
 
+    [Fact] public void 观察窗口60分钟时样本保留窗口随动_跨60分钟告警()
+    {
+        _settings.Current.LeakWindowMinutes = 60;   // 样本保留 = 60+15=75 分钟,首个样本不会被提前丢弃
+        Feed(1, "leaky", 100, 0);
+        Feed(1, "leaky", 300, 30);
+        Feed(1, "leaky", 700, 30);   // 60 分钟 +600MB → 告警
+        Assert.Single(_alerts);
+        Assert.Equal(600L << 20, _alerts[0].GrowthBytes);
+    }
+
     [Fact] public void RecentAlerts新在前且限量50()
     {
         for (int i = 1; i <= 60; i++)

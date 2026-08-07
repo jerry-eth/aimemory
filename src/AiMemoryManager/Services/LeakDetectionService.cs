@@ -6,7 +6,6 @@ public class LeakDetectionService
 {
     private const int MaxAlerts = 50;
     private static readonly TimeSpan AlertCooldown = TimeSpan.FromHours(2);
-    private static readonly TimeSpan KeepWindow = TimeSpan.FromMinutes(45);
 
     private sealed class Track
     {
@@ -32,6 +31,8 @@ public class LeakDetectionService
         var now = _clock();
         long threshold = (long)s.LeakGrowthThresholdMb << 20;
         var window = TimeSpan.FromMinutes(s.LeakWindowMinutes);
+        // 样本保留窗口 = 观察窗 + 15 分钟余量,保证窗口内的首个样本不被提前丢弃
+        var keepWindow = window + TimeSpan.FromMinutes(15);
 
         var seen = new HashSet<int>();
         foreach (var snap in snapshots)
@@ -45,7 +46,7 @@ public class LeakDetectionService
             if (t.Samples.Last?.Value.Bytes > snap.WorkingSetBytes)
                 t.Samples.Clear();
             t.Samples.AddLast((now, snap.WorkingSetBytes));
-            while (t.Samples.First != null && now - t.Samples.First.Value.Time > KeepWindow)
+            while (t.Samples.First != null && now - t.Samples.First.Value.Time > keepWindow)
                 t.Samples.RemoveFirst();
 
             var first = t.Samples.First!.Value;

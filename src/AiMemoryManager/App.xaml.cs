@@ -13,7 +13,7 @@ public partial class App : Application
     /// <summary>关机/注销时置 true,主窗口 OnClosing 不再取消关闭(否则系统提示"应用阻止关机")。</summary>
     internal static bool IsSessionEnding { get; private set; }
 
-    /// <summary>泄漏告警转发:LeakDetection 在非 UI 线程触发,由 MainWindow 订阅后切回 UI 线程弹通知。</summary>
+    /// <summary>泄漏告警转发:事件在 UI 线程触发(_leakTimer.Tick 内 Sample 始终由 Dispatcher 封送回 UI 线程),MainWindow 可直接弹通知。</summary>
     public static event Action<LeakAlert>? LeakAlerted;
 
     private Mutex? _mutex;
@@ -48,11 +48,15 @@ public partial class App : Application
         };
         _analysisTimer.Start();
 
-        // M2:30s 泄漏采样
+        // M2:30s 泄漏采样。进程枚举较耗时,放线程池;Sample 内部非线程安全,await 后回到 UI 线程再调用
         _leakTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        _leakTimer.Tick += (_, _) =>
+        _leakTimer.Tick += async (_, _) =>
         {
-            try { Locator.LeakDetection.Sample(Locator.Native.GetProcessSnapshots()); }
+            try
+            {
+                var snapshots = await Task.Run(() => Locator.Native.GetProcessSnapshots());
+                Locator.LeakDetection.Sample(snapshots);
+            }
             catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Leak] Sample failed: {ex}"); }
         };
         _leakTimer.Start();

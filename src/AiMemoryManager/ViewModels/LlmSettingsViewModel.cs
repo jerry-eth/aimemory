@@ -99,17 +99,43 @@ public partial class LlmSettingsViewModel : ObservableObject
         TestResult = "";
     }
 
+    /// <summary>本地服务判定:host 为 localhost/127.0.0.1/[::1](大小写不敏感)视为本地,密钥可留空。</summary>
+    private static bool IsLocalBaseUrl(string baseUrl)
+    {
+        if (!Uri.TryCreate(baseUrl.Trim(), UriKind.Absolute, out var uri)) return false;
+        var host = uri.Host;
+        return host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || host is "127.0.0.1" or "[::1]" or "::1";
+    }
+
+    /// <summary>档案名唯一化:与其他档案(不同 Id)重名时追加 " (2)" " (3)" … 后缀。</summary>
+    private static string UniqueProfileName(string name, string selfId)
+    {
+        bool Taken(string n) => Locator.Profiles.Profiles.Any(p => p.Id != selfId && p.Name == n);
+        if (!Taken(name)) return name;
+        for (int i = 2; ; i++)
+        {
+            var candidate = $"{name} ({i})";
+            if (!Taken(candidate)) return candidate;
+        }
+    }
+
     [RelayCommand]
     private void SaveProfile()
     {
         var isNew = string.IsNullOrEmpty(EditId);
-        // 新增态密钥必填;编辑态留空 = 保留原密钥
         if (string.IsNullOrWhiteSpace(EditName) ||
             string.IsNullOrWhiteSpace(EditBaseUrl) ||
-            string.IsNullOrWhiteSpace(EditModel) ||
-            (isNew && string.IsNullOrEmpty(EditApiKey)))
+            string.IsNullOrWhiteSpace(EditModel))
         {
             TestResult = Locator.L10n["Llm.Incomplete"];
+            return;
+        }
+        // 新增态密钥必填,但本地服务(Ollama 等,host 为 localhost/127.0.0.1/[::1])允许留空;
+        // 编辑态留空 = 保留原密钥
+        if (isNew && string.IsNullOrWhiteSpace(EditApiKey) && !IsLocalBaseUrl(EditBaseUrl))
+        {
+            TestResult = Locator.L10n["Llm.KeyRequiredRemote"];
             return;
         }
         try
@@ -119,10 +145,11 @@ public partial class LlmSettingsViewModel : ObservableObject
             var encrypted = !string.IsNullOrEmpty(EditApiKey)
                 ? SecretProtector.Protect(EditApiKey)
                 : Locator.Profiles.Profiles.FirstOrDefault(p => p.Id == id)?.EncryptedApiKey ?? "";
+            var name = UniqueProfileName(EditName.Trim(), id);
             Locator.Profiles.Save(new LlmProfile
             {
                 Id = id,
-                Name = EditName.Trim(),
+                Name = name,
                 BaseUrl = EditBaseUrl.Trim(),
                 EncryptedApiKey = encrypted,
                 Model = EditModel.Trim(),
@@ -265,6 +292,40 @@ public partial class LlmSettingsViewModel : ObservableObject
     {
         get => S.CustomInstructions;
         set { if (S.CustomInstructions == value) return; S.CustomInstructions = value; SaveSettings(); OnPropertyChanged(); }
+    }
+
+    // ---------- 泄漏检测(同样直读直写,数值含 NaN 防护) ----------
+
+    public bool LeakDetectionEnabled
+    {
+        get => S.LeakDetectionEnabled;
+        set { if (S.LeakDetectionEnabled == value) return; S.LeakDetectionEnabled = value; SaveSettings(); OnPropertyChanged(); }
+    }
+
+    public double LeakGrowthThresholdMb
+    {
+        get => S.LeakGrowthThresholdMb;
+        set
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return;
+            var v = (int)Math.Clamp(value, 50, 10000);
+            if (S.LeakGrowthThresholdMb == v) return;
+            S.LeakGrowthThresholdMb = v;
+            SaveSettings(); OnPropertyChanged();
+        }
+    }
+
+    public double LeakWindowMinutes
+    {
+        get => S.LeakWindowMinutes;
+        set
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return;
+            var v = (int)Math.Clamp(value, 5, 120);
+            if (S.LeakWindowMinutes == v) return;
+            S.LeakWindowMinutes = v;
+            SaveSettings(); OnPropertyChanged();
+        }
     }
 
     private static void SaveSettings() => Locator.Settings.Save();

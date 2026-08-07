@@ -24,7 +24,7 @@ public class AnalysisService
         => (_native, _whitelist, _guard, _profiles, _prompts, _client, _cache, _stats, _settings, _l10n)
          = (native, whitelist, guard, profiles, prompts, client, cache, stats, settings, l10n);
 
-    public Task<AnalysisResult> AnalyzeAsync(AnalysisTrigger trigger, CancellationToken ct = default)
+    public Task<AnalysisResult> AnalyzeAsync(AnalysisTrigger trigger, bool forceRefresh = false, CancellationToken ct = default)
         => Task.Run(async () =>
         {
             var profile = _profiles.GetActive()
@@ -39,17 +39,21 @@ public class AnalysisService
                 .ToList();
             var memory = _native.GetSystemMemory();
             var template = _prompts.GetDefault();
+            string language = _l10n.CurrentLanguage == "zh-CN" ? "中文" : "English";
+            string customInstructions = _settings.Current.CustomInstructions;
 
-            // 2. 缓存
-            var hash = AnalysisPromptBuilder.SnapshotHash(snapshots, profile.Model, template.Content);
-            if (_cache.TryGet(hash, out var cached))
+            // 2. 缓存(forceRefresh 时跳过读取,但仍写入)
+            var hash = AnalysisPromptBuilder.SnapshotHash(snapshots, profile.Model, template.Content,
+                customInstructions, language);
+            if (!forceRefresh && _cache.TryGet(hash, out var cached))
                 return Finish(new AnalysisResult(DateTimeOffset.Now, cached, new LlmUsage(0, 0), profile.Model, true, trigger));
 
-            // 3. LLM 调用
-            string language = _l10n.CurrentLanguage == "zh-CN" ? "中文" : "English";
+            // 3. LLM 调用(系统提示词中的占位符替换为实际片段)
+            var fragments = AnalysisPromptBuilder.BuildFragments(snapshots, memory, customInstructions, language);
+            var systemPrompt = AnalysisPromptBuilder.RenderTemplate(template.Content, fragments);
             var userPrompt = AnalysisPromptBuilder.BuildUserPrompt(
-                snapshots, memory, _settings.Current.CustomInstructions, language);
-            var resp = await _client.ChatAsync(profile, template.Content, userPrompt, ct);
+                snapshots, memory, customInstructions, language);
+            var resp = await _client.ChatAsync(profile, systemPrompt, userPrompt, ct);
 
             // 4. 解析 + 输出侧硬过滤(模型不可信)
             var suggestions = AnalysisResultParser.Parse(resp.Content)
