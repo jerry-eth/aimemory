@@ -2,10 +2,122 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
+      xmlns:conv="clr-namespace:AiMemoryManager.Converters"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Analysis], Source={x:Static services:Locator.L10n}}">
-    <Grid>
-        <TextBlock Text="{Binding [Nav.Analysis], Source={x:Static services:Locator.L10n}}"
-                   FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-    </Grid>
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
+    </Page.Resources>
+    <Page.DataContext>
+        <vm:SmartAnalysisViewModel/>
+    </Page.DataContext>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            <!-- 顶部操作条:开始分析 + 状态 + Token 用量(AsyncRelayCommand 执行中自动禁用按钮) -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16" Orientation="Horizontal">
+                    <ui:Button Content="{Binding [Analysis.Run], Source={x:Static services:Locator.L10n}}"
+                               Appearance="Primary" Command="{Binding RunAnalysisCommand}"
+                               Width="160" Height="40"/>
+                    <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
+                        <TextBlock Text="{Binding StatusText}"/>
+                        <TextBlock Text="{Binding UsageText}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+            <!-- 无档案引导卡 -->
+            <ui:Card Margin="0,4"
+                     Visibility="{Binding HasProfile, Converter={StaticResource InverseBoolToVis}}">
+                <TextBlock Margin="16" Text="{Binding [Analysis.NoProfile], Source={x:Static services:Locator.L10n}}"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}" FontWeight="SemiBold"/>
+            </ui:Card>
+            <!-- 建议列表:每条建议一张卡 -->
+            <ItemsControl ItemsSource="{Binding Suggestions}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ui:Card Margin="0,4">
+                            <Grid Margin="16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"/>
+                                        <!-- 风险徽章:按 Risk 上绿/橙/红 -->
+                                        <Border Margin="8,0,0,0" Padding="8,2" CornerRadius="4">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Risk}" Value="low">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Risk}" Value="medium">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Risk}" Value="high">
+                                                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding ActionText}" FontSize="12"
+                                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Reason}" TextWrapping="Wrap" Margin="0,4,0,0"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                                <!-- compress 建议:立即压缩(M2=全量 L1);terminate 建议:灰显 M3 说明 -->
+                                <ui:Button Grid.Column="1" VerticalAlignment="Center"
+                                           Content="{Binding [Analysis.CompressNow], Source={x:Static services:Locator.L10n}}"
+                                           Command="{Binding DataContext.CompressCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                           CommandParameter="{Binding}"
+                                           Visibility="{Binding CanExecute, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                                           Text="{Binding [Analysis.TerminateM3], Source={x:Static services:Locator.L10n}}"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Visibility="{Binding IsTerminate, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                        </ui:Card>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <!-- 泄漏告警卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Leak.Title], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding [Leak.Empty], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0"
+                               Visibility="{Binding HasLeakAlerts, Converter={StaticResource InverseBoolToVis}}"/>
+                    <ItemsControl ItemsSource="{Binding LeakAlerts}" Margin="0,8,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="1" Margin="12,0,0,0"
+                                               Foreground="{DynamicResource SystemFillColorCriticalBrush}">
+                                        <Run Text="+"/><Run Text="{Binding GrowthMb}"/><Run Text="MB"/>
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="2" Margin="12,0,0,0" Text="{Binding TimeText}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </ScrollViewer>
 </Page>
