@@ -78,7 +78,7 @@ public partial class MainWindow : FluentWindow
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!_reallyClose) { e.Cancel = true; Hide(); }   // 关闭即最小化到托盘,"退出"才真正退出
+        if (!_reallyClose && !App.IsSessionEnding) { e.Cancel = true; Hide(); }   // 关闭即最小化到托盘,"退出"才真正退出;关机/注销时不拦截
         else
         {
             TrayIconRenderer.Destroy(_currentTrayIcon);

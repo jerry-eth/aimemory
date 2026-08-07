@@ -30,6 +30,7 @@ public class RuleEngine
     public void Tick()
     {
         var s = _settings.Current;
+        if (!s.RulesMasterEnabled) { _overCount = 0; return; }   // 总开关关闭:全部规则静默
         _guard.IsFullscreenSettingEnabled = s.OnlyWhenNotFullscreen;
         var now = _clock();
         var level = s.AutoCleanIncludeL2 ? CleanLevel.L2 : CleanLevel.L1;

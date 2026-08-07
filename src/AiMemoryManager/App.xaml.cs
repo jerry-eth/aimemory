@@ -9,6 +9,9 @@ namespace AiMemoryManager;
 /// </summary>
 public partial class App : Application
 {
+    /// <summary>关机/注销时置 true,主窗口 OnClosing 不再取消关闭(否则系统提示"应用阻止关机")。</summary>
+    internal static bool IsSessionEnding { get; private set; }
+
     private Mutex? _mutex;
     private DispatcherTimer? _ruleTimer;
 
@@ -16,6 +19,8 @@ public partial class App : Application
     {
         _mutex = new Mutex(true, "AiMemoryManager.SingleInstance", out bool created);
         if (!created) { Shutdown(); return; }              // 单实例:第二个实例立即退出
+
+        SessionEnding += (_, _) => IsSessionEnding = true; // 关机/注销:允许窗口真正关闭
 
         Locator.Init();
         Locator.Monitor.Start();

@@ -12,6 +12,12 @@ public partial class RulesViewModel : ObservableObject
 {
     private static AppSettings S => Locator.Settings.Current;
 
+    public bool RulesMasterEnabled
+    {
+        get => S.RulesMasterEnabled;
+        set { if (S.RulesMasterEnabled == value) return; S.RulesMasterEnabled = value; Save(); OnPropertyChanged(); }
+    }
+
     public bool ThresholdRuleEnabled
     {
         get => S.ThresholdRuleEnabled;

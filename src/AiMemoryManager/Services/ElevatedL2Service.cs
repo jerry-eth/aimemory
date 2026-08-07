@@ -45,9 +45,12 @@ public class ElevatedL2Service : IL2Executor
     {
         if (!IsHelperTaskRegistered) RegisterHelperTask();
         try { File.Delete(_resultPath); } catch { }
+        var runStarted = DateTimeOffset.Now;    // 用于识别陈旧结果文件(上一次运行残留/删除失败)
         var run = Process.Start(new ProcessStartInfo("schtasks", $"/run /tn \"{TaskName}\"")
         { UseShellExecute = false, CreateNoWindow = true })!;
         run.WaitForExit();
+        if (run.ExitCode != 0)
+            throw new InvalidOperationException("schtasks /run 失败, exit=" + run.ExitCode);  // 任务未启动,干等只会超时
 
         // 轮询结果文件,最多 15 秒
         for (int i = 0; i < 150; i++)
@@ -58,10 +61,17 @@ public class ElevatedL2Service : IL2Executor
                 try
                 {
                     using var doc = JsonDocument.Parse(File.ReadAllText(_resultPath));
-                    int status = doc.RootElement.GetProperty("status").GetInt32();
-                    if (status != 0)
-                        throw new InvalidOperationException($"L2 清理失败,helper status={status}(NTSTATUS,可能特权未生效)");
-                    return doc.RootElement.GetProperty("freedBytes").GetInt64();
+                    var root = doc.RootElement;
+                    // 陈旧结果防护:time 早于本次 /run(留 5 秒容差)说明是残留文件,忽略并继续等新结果
+                    bool stale = root.TryGetProperty("time", out var t)
+                        && t.GetDateTimeOffset() < runStarted - TimeSpan.FromSeconds(5);
+                    if (!stale)
+                    {
+                        int status = root.GetProperty("status").GetInt32();
+                        if (status != 0)
+                            throw new InvalidOperationException($"L2 清理失败,helper status={status}(NTSTATUS,可能特权未生效)");
+                        return root.GetProperty("freedBytes").GetInt64();
+                    }
                 }
                 catch (IOException) { /* 文件尚在写入,继续等 */ }
                 catch (JsonException) { /* 读到未写完的部分 JSON,继续等 */ }

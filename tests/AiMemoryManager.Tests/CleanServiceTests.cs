@@ -65,7 +65,7 @@ public class CleanServiceTests
             {
                 new(1, "chrome", null, 800L << 20, true),
                 new(2, "code", null, 500L << 20, true),
-                new(3, "csrss", null, 10L << 20, false),
+                new(3, "csrss", null, 100L << 20, false),   // 100MB:超过 20MB 阈值过滤,使 IsSystemCritical 豁免断言真正承重
             },
             ForegroundPid = 1
         };

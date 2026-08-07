@@ -97,6 +97,21 @@ public class RuleEngineTests : IDisposable
         Assert.Equal(CleanTrigger.RuleTimer, fired[0].Trigger);
     }
 
+    [Fact] public void 总开关关闭_阈值与定时规则均不触发()
+    {
+        _settings.Current.RulesMasterEnabled = false;
+        _settings.Current.ThresholdRuleEnabled = true;
+        _settings.Current.SustainSeconds = 10;          // 1 次 tick 即满足持续条件
+        _settings.Current.TimerRuleEnabled = true;
+        _settings.Current.TimerIntervalMinutes = 60;
+        var e = Create(out var fired);
+        SetUsage(95);
+        e.Tick();                                       // 阈值条件已满足,但总开关关闭
+        _now += TimeSpan.FromMinutes(61);               // 定时条件也满足
+        e.Tick();
+        Assert.Empty(fired);
+    }
+
     [Fact] public void 触发级别跟随AutoCleanIncludeL2设置()
     {
         _settings.Current.ThresholdRuleEnabled = true;

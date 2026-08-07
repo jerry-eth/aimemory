@@ -12,12 +12,21 @@ public class WhitelistService
     };
 
     private readonly SettingsService _settings;
-    public WhitelistService(SettingsService settings) => _settings = settings;
+
+    // 不可变快照:CleanService 在线程池线程上枚举白名单,UI 线程可能并发 Add/Remove/Import,
+    // 直接读 live List 存在枚举竞态。每次变更后整体重建 HashSet,读端无锁且永不见半更新状态。
+    private volatile HashSet<string> _excludedSnapshot;
+
+    public WhitelistService(SettingsService settings)
+    {
+        _settings = settings;
+        _excludedSnapshot = BuildSnapshot();
+    }
 
     public IReadOnlyCollection<string> Excluded => _settings.Current.ExcludedProcesses;
 
     public bool IsExcluded(string processName) =>
-        Excluded.Contains(NormalizeName(processName));
+        _excludedSnapshot.Contains(NormalizeName(processName));
 
     public bool IsSystemCritical(string processName) =>
         SystemCritical.Contains(NormalizeName(processName));
@@ -28,12 +37,14 @@ public class WhitelistService
         if (n.Length == 0 || Excluded.Contains(n)) return;
         _settings.Current.ExcludedProcesses.Add(n);
         _settings.Save();
+        _excludedSnapshot = BuildSnapshot();
     }
 
     public void Remove(string processName)
     {
         _settings.Current.ExcludedProcesses.Remove(NormalizeName(processName));
         _settings.Save();
+        _excludedSnapshot = BuildSnapshot();
     }
 
     public void Import(string filePath)
@@ -45,10 +56,14 @@ public class WhitelistService
                 _settings.Current.ExcludedProcesses.Add(n);
         }
         _settings.Save();
+        _excludedSnapshot = BuildSnapshot();
     }
 
     public void Export(string filePath) =>
         File.WriteAllLines(filePath, Excluded.Select(n => n + ".exe"));
+
+    private HashSet<string> BuildSnapshot() =>
+        new(_settings.Current.ExcludedProcesses, StringComparer.OrdinalIgnoreCase);
 
     private static string NormalizeName(string name)
     {

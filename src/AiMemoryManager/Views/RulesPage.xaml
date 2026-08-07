@@ -10,6 +10,18 @@
     </Page.DataContext>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24">
+            <!-- 总开关卡 -->
+            <ui:Card Margin="0,4">
+                <Grid Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding [Rules.Master], Source={x:Static services:Locator.L10n}}"
+                               VerticalAlignment="Center"/>
+                    <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding RulesMasterEnabled}"/>
+                </Grid>
+            </ui:Card>
             <!-- 阈值规则卡 -->
             <ui:Card Margin="0,4">
                 <StackPanel Margin="16">

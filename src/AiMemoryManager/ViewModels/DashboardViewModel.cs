@@ -49,6 +49,11 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     {
         IsCleaning = true;
         try { await Locator.Clean.RunL1Async(CleanTrigger.Manual); Refresh(); }
+        catch (Exception ex)
+        {
+            // 与 L2 一致:清理失败不能静默,给本地化失败文案;M3 换 InfoBar
+            LastCleanText = string.Format(Locator.L10n["Dashboard.L1Failed"], ex.Message);
+        }
         finally { IsCleaning = false; }
     }
 
