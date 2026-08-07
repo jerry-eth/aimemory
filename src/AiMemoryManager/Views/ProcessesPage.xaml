@@ -1,10 +1,72 @@
-﻿<Page x:Class="AiMemoryManager.Views.ProcessesPage"
+<Page x:Class="AiMemoryManager.Views.ProcessesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}">
-    <Grid>
-        <TextBlock Text="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
+    <Page.DataContext>
+        <vm:ProcessesViewModel/>
+    </Page.DataContext>
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <ui:Button Content="{Binding [Processes.Refresh], Source={x:Static services:Locator.L10n}}"
+                   Command="{Binding RefreshCommand}" HorizontalAlignment="Left"/>
+        <!-- WPF-UI 4.3.0 不为原生 DataGrid 提供主题,这里只用 DynamicResource 画刷做最低限度适配 -->
+        <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow"
+                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                  Background="{x:Null}" BorderThickness="0"
+                  RowBackground="{x:Null}" AlternatingRowBackground="{x:Null}"
+                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                  HorizontalGridLinesBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                  Margin="0,12,0,0">
+            <DataGrid.ColumnHeaderStyle>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <Setter Property="Padding" Value="8,4"/>
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <!-- 系统关键进程整行灰显 -->
+                        <DataTrigger Binding="{Binding IsCritical}" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <!-- ContextMenu 不在可视树内,须经 PlacementTarget 取宿主 DataGrid 的 DataContext 与选中行 -->
+                    <MenuItem Header="{Binding [Processes.AddWhitelist], Source={x:Static services:Locator.L10n}}"
+                              Command="{Binding PlacementTarget.DataContext.AddToWhitelistCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="{Binding [Processes.Col.Name], Source={x:Static services:Locator.L10n}}"
+                                    Binding="{Binding Name}" Width="2*"/>
+                <DataGridTextColumn Header="{Binding [Processes.Col.Memory], Source={x:Static services:Locator.L10n}}"
+                                    Binding="{Binding MemoryText}" Width="*"/>
+                <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
+                                    Binding="{Binding Path}" Width="3*"/>
+                <DataGridTemplateColumn Header="{Binding [Processes.Col.Whitelist], Source={x:Static services:Locator.L10n}}"
+                                        Width="*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsExcluded, Mode=OneWay}"
+                                      IsEnabled="{Binding IsNotCritical}"
+                                      HorizontalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
     </Grid>
 </Page>
