@@ -1,12 +1,33 @@
-﻿<Window x:Class="AiMemoryManager.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:AiMemoryManager"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+﻿<ui:FluentWindow x:Class="AiMemoryManager.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:views="clr-namespace:AiMemoryManager.Views"
+    xmlns:services="clr-namespace:AiMemoryManager.Services"
+    Title="{Binding [App.Title], Source={x:Static services:Locator.L10n}, FallbackValue=AI Memory Manager}"
+    Width="960" Height="640" MinWidth="480" MinHeight="480"
+    WindowBackdropType="Mica" ExtendsContentIntoTitleBar="True">
     <Grid>
-
+        <ui:NavigationView x:Name="RootNavigation" IsBackButtonVisible="Collapsed">
+            <ui:NavigationView.MenuItems>
+                <ui:NavigationViewItem Content="{Binding [Nav.Dashboard], Source={x:Static services:Locator.L10n}}"
+                                       Tag="dashboard" TargetPageType="{x:Type views:DashboardPage}"
+                                       Icon="{ui:SymbolIcon Home24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}"
+                                       Tag="processes" TargetPageType="{x:Type views:ProcessesPage}"
+                                       Icon="{ui:SymbolIcon AppsList24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.Rules], Source={x:Static services:Locator.L10n}}"
+                                       Tag="rules" TargetPageType="{x:Type views:RulesPage}"
+                                       Icon="{ui:SymbolIcon Timer24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.Whitelist], Source={x:Static services:Locator.L10n}}"
+                                       Tag="whitelist" TargetPageType="{x:Type views:WhitelistPage}"
+                                       Icon="{ui:SymbolIcon ShieldCheckmark24}"/>
+            </ui:NavigationView.MenuItems>
+            <ui:NavigationView.FooterMenuItems>
+                <ui:NavigationViewItem Content="{Binding [Nav.Settings], Source={x:Static services:Locator.L10n}}"
+                                       Tag="settings" TargetPageType="{x:Type views:SettingsPage}"
+                                       Icon="{ui:SymbolIcon Settings24}"/>
+            </ui:NavigationView.FooterMenuItems>
+        </ui:NavigationView>
     </Grid>
-</Window>
+</ui:FluentWindow>

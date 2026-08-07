@@ -1,0 +1,10 @@
+﻿<Page x:Class="AiMemoryManager.Views.ProcessesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:services="clr-namespace:AiMemoryManager.Services"
+      Title="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}">
+    <Grid>
+        <TextBlock Text="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
+    </Grid>
+</Page>
