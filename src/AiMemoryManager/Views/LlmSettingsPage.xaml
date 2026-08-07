@@ -2,10 +2,203 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Llm], Source={x:Static services:Locator.L10n}}">
-    <Grid>
-        <TextBlock Text="{Binding [Nav.Llm], Source={x:Static services:Locator.L10n}}"
-                   FontSize="24" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-    </Grid>
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Page.Resources>
+    <Page.DataContext>
+        <vm:LlmSettingsViewModel/>
+    </Page.DataContext>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            <!-- 配置档案卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding [Llm.Profiles], Source={x:Static services:Locator.L10n}}"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <ui:Button Grid.Column="1"
+                                   Content="{Binding [Llm.Add], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding NewProfileCommand}"/>
+                    </Grid>
+                    <ListView ItemsSource="{Binding Profiles}" Margin="0,12,0,0"
+                              HorizontalContentAlignment="Stretch">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding [Llm.Active], Source={x:Static services:Locator.L10n}}"
+                                                       Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}"
+                                                       Foreground="{DynamicResource SystemFillColorAttentionBrush}"
+                                                       Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Model}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ui:Button Content="{Binding [Llm.Edit], Source={x:Static services:Locator.L10n}}"
+                                                   Command="{Binding DataContext.EditProfileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                   CommandParameter="{Binding}"/>
+                                        <ui:Button Content="{Binding [Llm.SetActive], Source={x:Static services:Locator.L10n}}"
+                                                   Command="{Binding DataContext.SetActiveCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                   CommandParameter="{Binding}" Margin="4,0,0,0"/>
+                                        <ui:Button Content="{Binding [Llm.Delete], Source={x:Static services:Locator.L10n}}"
+                                                   Command="{Binding DataContext.DeleteProfileCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                   CommandParameter="{Binding}" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <!-- 编辑表单(新增/编辑共用) -->
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{Binding [Llm.Name], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,4,12,4"/>
+                        <ui:TextBox Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                    Margin="0,4"/>
+                        <TextBlock Grid.Row="1" Text="{Binding [Llm.BaseUrl], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,4,12,4"/>
+                        <ui:TextBox Grid.Row="1" Grid.Column="1"
+                                    Text="{Binding EditBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
+                        <TextBlock Grid.Row="2" Text="{Binding [Llm.ApiKey], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,4,12,4"/>
+                        <ui:TextBox Grid.Row="2" Grid.Column="1"
+                                    Text="{Binding EditApiKey, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="{Binding ApiKeyPlaceholder}" Margin="0,4"/>
+                        <TextBlock Grid.Row="3" Text="{Binding [Llm.Model], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,4,12,4"/>
+                        <ComboBox Grid.Row="3" Grid.Column="1" IsEditable="True" Margin="0,4"
+                                  ItemsSource="{Binding ModelSuggestions}"
+                                  Text="{Binding EditModel, UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Grid.Row="4" Text="{Binding [Llm.Price], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,4,12,4" TextWrapping="Wrap"/>
+                        <ui:NumberBox Grid.Row="4" Grid.Column="1" Margin="0,4" HorizontalAlignment="Left" Width="160"
+                                      Value="{Binding EditPrice, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="0" SmallChange="0.5" LargeChange="1"
+                                      SpinButtonPlacementMode="Inline"/>
+                    </Grid>
+                    <TextBlock Text="{Binding [Llm.KeyEncrypted], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <ui:Button Content="{Binding [Common.Save], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding SaveProfileCommand}" Appearance="Primary"/>
+                        <ui:Button Content="{Binding [Llm.Test], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding TestConnectionCommand}" Margin="8,0,0,0"/>
+                        <ui:Button Content="{Binding [Llm.FetchModels], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding FetchModelsCommand}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding TestResult}" TextWrapping="Wrap" Margin="0,8,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:Card>
+            <!-- 自定义指令卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Llm.CustomInstructions], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <ui:TextBox AcceptsReturn="True" TextWrapping="Wrap" Height="60" Margin="0,8,0,0"
+                                VerticalContentAlignment="Top"
+                                Text="{Binding CustomInstructions}"/>
+                    <TextBlock Text="{Binding [Llm.CustomHint], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </ui:Card>
+            <!-- 自动触发卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Llm.Triggers], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding [Llm.ThresholdTrigger], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding LlmThresholdTriggerEnabled}"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding [Llm.DailyCap], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ui:NumberBox Value="{Binding LlmDailyCallCap, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="1" Maximum="100" SmallChange="1" LargeChange="5"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                    </StackPanel>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding [Llm.TimerTrigger], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding LlmTimerTriggerEnabled}"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <ui:NumberBox Value="{Binding LlmTimerIntervalHours, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="1" Maximum="168" SmallChange="1" LargeChange="6"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding [Llm.Budget], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0" TextWrapping="Wrap"/>
+                        <ui:NumberBox Value="{Binding MonthlyTokenBudget, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="0" SmallChange="10000" LargeChange="100000"
+                                      SpinButtonPlacementMode="Inline" Width="160"/>
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+            <!-- 提示词模板卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Llm.Prompts], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <ComboBox ItemsSource="{Binding Templates}" DisplayMemberPath="Name"
+                              SelectedItem="{Binding SelectedTemplate}" Margin="0,8,0,0"/>
+                    <TextBlock Text="{Binding [Llm.PromptEdit], Source={x:Static services:Locator.L10n}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0"
+                               TextWrapping="Wrap"/>
+                    <ui:TextBox AcceptsReturn="True" TextWrapping="Wrap" Height="180" Margin="0,8,0,0"
+                                VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto"
+                                Text="{Binding TemplateContent}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <ui:Button Content="{Binding [Common.Save], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding SaveTemplateCommand}" Appearance="Primary"/>
+                        <ui:Button Content="{Binding [Llm.NewTemplate], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding NewTemplateCommand}" Margin="8,0,0,0"/>
+                        <ui:Button Content="{Binding [Llm.SetDefaultTemplate], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding SetDefaultTemplateCommand}" Margin="8,0,0,0"/>
+                        <ui:Button Content="{Binding [Llm.RestoreDefault], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding RestoreBuiltinCommand}" Margin="8,0,0,0"/>
+                        <ui:Button Content="{Binding [Llm.Delete], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding DeleteTemplateCommand}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding TemplateStatus}" Margin="0,8,0,0"
+                               Foreground="{DynamicResource SystemFillColorAttentionBrush}"/>
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </ScrollViewer>
 </Page>
