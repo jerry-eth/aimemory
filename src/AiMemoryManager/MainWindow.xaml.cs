@@ -34,6 +34,12 @@ public partial class MainWindow : FluentWindow
         // Sampled 在线程池线程触发,先切回 UI 线程再更新托盘
         Locator.Monitor.Sampled += (_, info) =>
             Dispatcher.BeginInvoke(() => UpdateTray(info.UsedPercent));
+
+        // 泄漏告警(App 转发,线程不定)→ 切回 UI 线程弹 Windows 通知
+        App.LeakAlerted += alert => Dispatcher.BeginInvoke(() =>
+            Tray.ShowNotification(Locator.L10n["App.Title"],
+                string.Format(Locator.L10n["Leak.Alert"], alert.ProcessName, alert.GrowthBytes / (1 << 20)),
+                H.NotifyIcon.Core.NotificationIcon.Warning));
     }
 
     private void UpdateTray(double percent)

@@ -17,6 +17,14 @@ public static class Locator
     public static RuleEngine Rules { get; private set; } = null!;
     public static MemoryMonitorService Monitor { get; private set; } = null!;
     public static LocalizationService L10n { get; private set; } = null!;
+    public static LlmProfileService Profiles { get; private set; } = null!;
+    public static PromptTemplateService Prompts { get; private set; } = null!;
+    public static TokenStatsService TokenStats { get; private set; } = null!;
+    public static ILlmClient LlmClient { get; private set; } = null!;
+    public static AnalysisCacheService AnalysisCache { get; private set; } = null!;
+    public static AnalysisService Analysis { get; private set; } = null!;
+    public static AnalysisScheduler Scheduler { get; private set; } = null!;
+    public static LeakDetectionService LeakDetection { get; private set; } = null!;
 
     public static void Init()
     {
@@ -32,5 +40,17 @@ public static class Locator
         L10n = new LocalizationService(Path.Combine(AppContext.BaseDirectory, "Assets", "i18n"));
         if (Settings.Current.Language == "auto") L10n.SetAuto();
         else L10n.CurrentLanguage = Settings.Current.Language;
+
+        Profiles = new LlmProfileService(LlmProfileService.DefaultPath(), Settings);
+        Profiles.Load();
+        Prompts = new PromptTemplateService(PromptTemplateService.DefaultPath());
+        Prompts.Load();
+        TokenStats = new TokenStatsService(TokenStatsService.DefaultPath(), () => DateTimeOffset.Now);
+        LlmClient = new OpenAiCompatibleClient();
+        AnalysisCache = new AnalysisCacheService(AnalysisCacheService.DefaultPath(), () => DateTimeOffset.Now);
+        Analysis = new AnalysisService(Native, Whitelist, Guard, Profiles, Prompts, LlmClient,
+            AnalysisCache, TokenStats, Settings, L10n);
+        Scheduler = new AnalysisScheduler(Settings, Native, Analysis.AnalyzeAsync, TokenStats, () => DateTimeOffset.Now);
+        LeakDetection = new LeakDetectionService(Settings, () => DateTimeOffset.Now);
     }
 }

@@ -30,6 +30,15 @@
                 <ui:NavigationViewItem Content="{Binding [Nav.Rules], Source={x:Static services:Locator.L10n}}"
                                        Tag="rules" TargetPageType="{x:Type views:RulesPage}"
                                        Icon="{ui:SymbolIcon Timer24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.Analysis], Source={x:Static services:Locator.L10n}}"
+                                       Tag="analysis" TargetPageType="{x:Type views:SmartAnalysisPage}"
+                                       Icon="{ui:SymbolIcon Sparkle24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.Llm], Source={x:Static services:Locator.L10n}}"
+                                       Tag="llm" TargetPageType="{x:Type views:LlmSettingsPage}"
+                                       Icon="{ui:SymbolIcon Bot24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.TokenStats], Source={x:Static services:Locator.L10n}}"
+                                       Tag="tokens" TargetPageType="{x:Type views:TokenStatsPage}"
+                                       Icon="{ui:SymbolIcon DataUsage24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.Whitelist], Source={x:Static services:Locator.L10n}}"
                                        Tag="whitelist" TargetPageType="{x:Type views:WhitelistPage}"
                                        Icon="{ui:SymbolIcon ShieldCheckmark24}"/>
