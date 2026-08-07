@@ -1,10 +1,73 @@
-﻿<Page x:Class="AiMemoryManager.Views.RulesPage"
+<Page x:Class="AiMemoryManager.Views.RulesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Rules], Source={x:Static services:Locator.L10n}}">
-    <Grid>
-        <TextBlock Text="{Binding [Nav.Rules], Source={x:Static services:Locator.L10n}}"
-                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
-    </Grid>
+    <Page.DataContext>
+        <vm:RulesViewModel/>
+    </Page.DataContext>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            <!-- 阈值规则卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <ui:ToggleSwitch IsChecked="{Binding ThresholdRuleEnabled}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding [Rules.Threshold], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ui:NumberBox Value="{Binding ThresholdPercent, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="40" Maximum="95" SmallChange="1" LargeChange="5"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                        <TextBlock Text="{Binding [Rules.ThresholdSuffix], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="8,0"/>
+                        <ui:NumberBox Value="{Binding SustainSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="10" Maximum="300" SmallChange="5" LargeChange="30"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                        <TextBlock Text="{Binding [Rules.SustainSuffix], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+            <!-- 定时规则卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <ui:ToggleSwitch IsChecked="{Binding TimerRuleEnabled}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding [Rules.Timer], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ui:NumberBox Value="{Binding TimerIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="1" Maximum="1440" SmallChange="5" LargeChange="30"
+                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                        <TextBlock Text="{Binding [Rules.TimerSuffix], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </ui:Card>
+            <!-- 独立开关卡 -->
+            <ui:Card Margin="0,4">
+                <StackPanel Margin="16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding [Rules.IncludeL2], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoCleanIncludeL2}"/>
+                    </Grid>
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding [Rules.NoFullscreen], Source={x:Static services:Locator.L10n}}"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding OnlyWhenNotFullscreen}"/>
+                    </Grid>
+                </StackPanel>
+            </ui:Card>
+        </StackPanel>
+    </ScrollViewer>
 </Page>
