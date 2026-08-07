@@ -20,5 +20,6 @@
   "Settings.Language": "Language", "Settings.LangAuto": "Follow System",
   "Settings.Animations": "UI Animations", "Settings.About": "About",
   "Tray.Clean": "Clean Now", "Tray.Open": "Open Main Window", "Tray.Exit": "Exit",
+  "Tray.ToolTip": "Memory used {0}%",
   "Clean.Done": "Clean complete, freed {0} MB"
 }
