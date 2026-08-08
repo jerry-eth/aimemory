@@ -10,6 +10,16 @@
     ResizeMode="CanResize" SizeToContent="Manual"
     WindowBackdropType="Mica" ExtendsContentIntoTitleBar="True">
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <!-- 自定义标题栏:启用常规最小化/最大化(还原)/关闭按钮。 -->
+        <ui:TitleBar Grid.Row="0"
+                     Title="{Binding [App.Title], Source={x:Static services:Locator.L10n}}"
+                     ShowMinimize="True" ShowMaximize="True" ShowClose="True"
+                     CanMaximize="True"/>
+        <Grid Grid.Row="1">
         <tb:TaskbarIcon x:Name="Tray" ToolTipText="AI Memory Manager" TrayMouseDoubleClick="OnTrayOpen">
             <tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>
@@ -53,5 +63,6 @@
                                        Icon="{ui:SymbolIcon Settings24}"/>
             </ui:NavigationView.FooterMenuItems>
         </ui:NavigationView>
+        </Grid>
     </Grid>
 </ui:FluentWindow>
