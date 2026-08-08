@@ -29,11 +29,12 @@
         <!-- WPF-UI 4.3.0 不为原生 DataGrid 提供主题,这里只用 DynamicResource 画刷做最低限度适配 -->
         <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" AutoGenerateColumns="False"
                   IsReadOnly="True" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow"
-                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                  HeadersVisibility="Column" GridLinesVisibility="All"
                   Background="{x:Null}" BorderThickness="0"
                   RowBackground="{x:Null}" AlternatingRowBackground="{x:Null}"
                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                   HorizontalGridLinesBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                   VerticalGridLinesBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   Margin="0,12,0,0">
             <DataGrid.ColumnHeaderStyle>
@@ -41,6 +42,7 @@
                     <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
                     <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                     <Setter Property="Padding" Value="8,4"/>
+                     <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 </Style>
             </DataGrid.ColumnHeaderStyle>
             <DataGrid.RowStyle>
@@ -63,7 +65,7 @@
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
                 <!-- L3 勾选列:系统关键/白名单/防误杀/前台行(CanKill=false)禁用 -->
-                <DataGridTemplateColumn Width="40">
+                <DataGridTemplateColumn Width="44" MinWidth="44">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -72,14 +74,36 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="{Binding [Processes.Col.Name], Source={x:Static services:Locator.L10n}}"
-                                    Binding="{Binding Name}" Width="2*"/>
-                <DataGridTextColumn Header="{Binding [Processes.Col.Memory], Source={x:Static services:Locator.L10n}}"
-                                    Binding="{Binding MemoryText}" Width="*"/>
-                <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
-                                    Binding="{Binding Path}" Width="3*"/>
+                <DataGridTemplateColumn Header="{Binding [Processes.Col.Name], Source={x:Static services:Locator.L10n}}"
+                                        Width="2*" MinWidth="180">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding Name}" Margin="8,0" VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="{Binding [Processes.Col.Memory], Source={x:Static services:Locator.L10n}}"
+                                        Width="*" MinWidth="110">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding MemoryText}" HorizontalAlignment="Right"
+                                       Margin="8,0" VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
+                                        Width="3*" MinWidth="300">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Path}" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding Path}" Margin="8,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="{Binding [Processes.Col.Whitelist], Source={x:Static services:Locator.L10n}}"
-                                        Width="*">
+                                        Width="*" MinWidth="120">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsExcluded, Mode=OneWay}"

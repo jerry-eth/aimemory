@@ -6,7 +6,7 @@
     xmlns:views="clr-namespace:AiMemoryManager.Views"
     xmlns:services="clr-namespace:AiMemoryManager.Services"
     Title="{Binding [App.Title], Source={x:Static services:Locator.L10n}, FallbackValue=AI Memory Manager}"
-    Width="960" Height="640" MinWidth="820" MinHeight="560"
+    Width="960" Height="640" MinWidth="1100" MinHeight="560"
     ResizeMode="CanResize" SizeToContent="Manual"
     WindowBackdropType="Mica" ExtendsContentIntoTitleBar="True">
     <Grid>

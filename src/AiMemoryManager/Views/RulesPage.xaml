@@ -8,57 +8,83 @@
     <Page.DataContext>
         <vm:RulesViewModel/>
     </Page.DataContext>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <StackPanel Margin="24" MinWidth="560">
             <!-- 总开关卡 -->
-            <ui:Card Margin="0,4">
+            <ui:Card Margin="0,0,0,12">
                 <Grid Margin="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="{Binding [Rules.Master], Source={x:Static services:Locator.L10n}}"
-                               VerticalAlignment="Center"/>
+                               FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding RulesMasterEnabled}"/>
                 </Grid>
             </ui:Card>
             <!-- 阈值规则卡 -->
-            <ui:Card Margin="0,4">
-                <StackPanel Margin="16">
-                    <ui:ToggleSwitch IsChecked="{Binding ThresholdRuleEnabled}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <ui:Card Margin="0,0,0,12">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding [Rules.Threshold], Source={x:Static services:Locator.L10n}}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                   FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding ThresholdRuleEnabled}"/>
+                    </Grid>
+                    <Border Grid.Row="1" Height="1" Margin="0,12,0,0"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}"/>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0">
                         <ui:NumberBox Value="{Binding ThresholdPercent, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="40" Maximum="95" SmallChange="1" LargeChange="5"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150" MinWidth="150"/>
                         <TextBlock Text="{Binding [Rules.ThresholdSuffix], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="8,0"/>
                         <ui:NumberBox Value="{Binding SustainSeconds, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="10" Maximum="300" SmallChange="5" LargeChange="30"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150" MinWidth="150"/>
                         <TextBlock Text="{Binding [Rules.SustainSuffix], Source={x:Static services:Locator.L10n}}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                   VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </ui:Card>
             <!-- 定时规则卡 -->
-            <ui:Card Margin="0,4">
-                <StackPanel Margin="16">
-                    <ui:ToggleSwitch IsChecked="{Binding TimerRuleEnabled}"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <ui:Card Margin="0,0,0,12">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="{Binding [Rules.Timer], Source={x:Static services:Locator.L10n}}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                   FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding TimerRuleEnabled}"/>
+                    </Grid>
+                    <Border Grid.Row="1" Height="1" Margin="0,12,0,0"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}"/>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,16,0,0">
                         <ui:NumberBox Value="{Binding TimerIntervalMinutes, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="1" Maximum="1440" SmallChange="5" LargeChange="30"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150" MinWidth="150"/>
                         <TextBlock Text="{Binding [Rules.TimerSuffix], Source={x:Static services:Locator.L10n}}"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                   VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
             </ui:Card>
             <!-- 独立开关卡 -->
-            <ui:Card Margin="0,4">
+            <ui:Card Margin="0,0,0,12">
                 <StackPanel Margin="16">
                     <Grid>
                         <Grid.ColumnDefinitions>
