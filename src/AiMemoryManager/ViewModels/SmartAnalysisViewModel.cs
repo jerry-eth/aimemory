@@ -36,6 +36,7 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _hasReport;
     public ObservableCollection<SuggestionItemViewModel> Suggestions { get; } = new();
     public ObservableCollection<LeakAlertItem> LeakAlerts { get; } = new();
+    public ObservableCollection<AnalysisChatMessage> ChatMessages { get; } = new();
 
     [ObservableProperty] private bool _isAnalyzing;
     [ObservableProperty] private string _statusText = "";
@@ -43,6 +44,11 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _hasProfile;
     [ObservableProperty] private bool _hasLeakAlerts;
     [ObservableProperty] private bool _hasSuggestions;
+    [ObservableProperty] private string _chatInput = "";
+    [ObservableProperty] private bool _isChatBusy;
+    [ObservableProperty] private AnalysisActionPlan? _pendingChatPlan;
+    [ObservableProperty] private bool _hasPendingChatPlan;
+    [ObservableProperty] private string _chatPlanText = "";
 
     public SmartAnalysisViewModel()
     {
@@ -68,6 +74,7 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
                   + (r.FromCache ? " " + Locator.L10n["Analysis.FromCache"] : "");
         StatusText = string.Format(Locator.L10n["Analysis.LastRun"], r.Time.ToLocalTime().ToString("HH:mm:ss"));
         RefreshLeakAlerts();
+        AddChatMessage("assistant", $"{Report.Summary} {string.Join("；", Report.Recommendations)}".Trim());
     }
 
     /// <summary>手动触发前置检查:档案存在 + 未达月度预算(超预算手动分析被拦并给出可见提示)。</summary>
@@ -85,12 +92,92 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void OpenChat()
+    private async Task SendChatAsync()
     {
-        var dialog = new AnalysisChatDialog { Owner = System.Windows.Application.Current.MainWindow };
-        dialog.ShowDialog();
+        if (IsChatBusy || string.IsNullOrWhiteSpace(ChatInput)) return;
+        var text = ChatInput.Trim();
+        ChatInput = "";
+        ClearChatPlan();
+        var history = ChatMessages.ToList();
+        AddChatMessage("user", text);
+        IsChatBusy = true;
+        try
+        {
+            var response = await Locator.AnalysisChat.ChatAsync(Report, history, text);
+            AddChatMessage("assistant", response.Answer);
+            PendingChatPlan = response.Plan is { IsExecutable: true } ? response.Plan : null;
+            HasPendingChatPlan = PendingChatPlan is not null;
+            ChatPlanText = PendingChatPlan is null ? "" : DescribePlan(PendingChatPlan);
+        }
+        catch (Exception ex)
+        {
+            AddChatMessage("assistant", ex.Message);
+        }
+        finally { IsChatBusy = false; }
     }
 
+    [RelayCommand]
+    private async Task ExecuteChatPlanAsync()
+    {
+        if (PendingChatPlan is not { IsExecutable: true } plan) return;
+        try
+        {
+            IReadOnlyCollection<int> pids = Array.Empty<int>();
+            if (plan.Operation == "terminate_processes")
+            {
+                var targets = Locator.AnalysisActions.ResolveTerminateTargets(plan);
+                if (targets.Count == 0)
+                {
+                    AddChatMessage("assistant", Locator.L10n["Analysis.NoneKillable"]);
+                    ClearChatPlan();
+                    return;
+                }
+                var rows = targets.Select(t => new TerminateConfirmItem(t.Pid, t.Name, t.Path,
+                    t.WorkingSetBytes, Locator.Unsaved.HasUnsavedSigns(t.Pid))).ToList();
+                var dialog = new TerminateConfirmDialog(rows) { Owner = System.Windows.Application.Current.MainWindow };
+                if (dialog.ShowDialog() != true) return;
+                pids = dialog.SelectedPids;
+            }
+            else
+            {
+                var dialog = new SlimConfirmDialog(
+                    Locator.L10n["Analysis.ChatTitle"],
+                    DescribePlan(plan) + "\n\n" + Locator.L10n["Analysis.ChatConfirm"],
+                    Locator.L10n["Analysis.ChatExecute"])
+                { Owner = System.Windows.Application.Current.MainWindow };
+                if (dialog.ShowDialog() != true) return;
+            }
+
+            var result = await Locator.AnalysisActions.ExecuteAsync(plan, pids);
+            AddChatMessage("assistant", string.Format(Locator.L10n["Analysis.ChatExecuted"],
+                result.FreedBytes / (1 << 20), result.ProcessCount, result.FailedCount));
+            ClearChatPlan();
+        }
+        catch (Exception ex) { AddChatMessage("assistant", ex.Message); }
+    }
+
+    private void AddChatMessage(string role, string content) =>
+        ChatMessages.Add(new AnalysisChatMessage(role, content, DateTimeOffset.Now));
+
+    private void ClearChatPlan()
+    {
+        PendingChatPlan = null;
+        HasPendingChatPlan = false;
+        ChatPlanText = "";
+    }
+
+    private static string DescribePlan(AnalysisActionPlan plan)
+    {
+        var operation = plan.Operation switch
+        {
+            "clean_working_sets" => "清理进程工作集",
+            "purge_standby" => "清理待机列表",
+            "terminate_processes" => "结束指定进程",
+            _ => "无操作"
+        };
+        var targets = plan.Targets.Count == 0 ? "全部可清理目标" : string.Join(", ", plan.Targets);
+        return $"{operation}：{targets}\n理由：{plan.Reason}\n风险：{plan.Risk}";
+    }
     [RelayCommand]
     private Task RunAnalysisAsync() => RunAsync(forceRefresh: false);
 
@@ -196,3 +283,7 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
 
     public void Dispose() => Locator.Analysis.AnalysisCompleted -= OnAnalysisCompleted;
 }
+
+
+
+

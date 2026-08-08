@@ -22,33 +22,82 @@
                                Appearance="Secondary" Command="{Binding ForceRefreshCommand}"
                                Width="120" Height="40" Margin="8,0,0,0"
                                Visibility="{Binding HasSuggestions, Converter={StaticResource BoolToVis}}"/>
-                    <ui:Button Content="{Binding [Analysis.Chat], Source={x:Static services:Locator.L10n}}"
-                               Appearance="Secondary" Command="{Binding OpenChatCommand}"
-                               Width="120" Height="40" Margin="8,0,0,0"/>
                     <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
                         <TextBlock Text="{Binding StatusText}"/>
                         <TextBlock Text="{Binding UsageText}"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
                 </StackPanel>
-            </ui:Card>
-<!-- 分析报告：结果在共享 VM 中保留，切换菜单后仍可查看 -->
+            </ui:Card>            <!-- 统一的大模型对话区：报告、历史消息和执行确认都在当前页面内 -->
             <ui:Card Margin="0,4" Visibility="{Binding HasReport, Converter={StaticResource BoolToVis}}">
                 <StackPanel Margin="16">
-                    <TextBlock Text="{Binding [Analysis.ReportTitle], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold" FontSize="16"/>
-                    <TextBlock Text="{Binding Report.Summary}" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                    <WrapPanel Margin="0,8,0,0">
-                        <TextBlock Text="{Binding [Analysis.ReportMemory], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
-                        <TextBlock Text="："/><TextBlock Text="{Binding Report.MemoryText}" Margin="0,0,20,0"/>
-                        <TextBlock Text="{Binding [Analysis.ReportProcesses], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
-                        <TextBlock Text="："/><TextBlock Text="{Binding Report.ProcessCount}" Margin="0,0,20,0"/>
-                        <TextBlock Text="{Binding [Analysis.ReportSuggestions], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
-                        <TextBlock Text="："/><TextBlock Text="{Binding Report.SuggestionCount}"/>
-                    </WrapPanel>
-                    <ItemsControl ItemsSource="{Binding Report.Recommendations}" Margin="0,8,0,0"/>
+                    <TextBlock Text="{Binding [Analysis.ChatTitle], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold" FontSize="16"/>
+                    <ui:Card Margin="0,8,0,4">
+                        <StackPanel Margin="12">
+                            <TextBlock Text="{Binding [Analysis.ReportTitle], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Report.Summary}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            <WrapPanel Margin="0,6,0,0">
+                                <TextBlock Text="{Binding [Analysis.ReportMemory], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                                <TextBlock Text="："/><TextBlock Text="{Binding Report.MemoryText}" Margin="0,0,16,0"/>
+                                <TextBlock Text="{Binding [Analysis.ReportProcesses], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                                <TextBlock Text="："/><TextBlock Text="{Binding Report.ProcessCount}" Margin="0,0,16,0"/>
+                                <TextBlock Text="{Binding [Analysis.ReportSuggestions], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                                <TextBlock Text="："/><TextBlock Text="{Binding Report.SuggestionCount}"/>
+                            </WrapPanel>
+                            <ItemsControl ItemsSource="{Binding Report.Recommendations}" Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </ui:Card>
+                    <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding ChatMessages}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="10" Margin="0,3" CornerRadius="6">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsUser}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Role}" FontWeight="SemiBold" FontSize="12"/>
+                                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <Border Padding="10" Margin="0,8,0,4" BorderThickness="1" CornerRadius="6"
+                            BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
+                            Visibility="{Binding HasPendingChatPlan, Converter={StaticResource BoolToVis}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="{Binding [Analysis.ChatPlan], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding ChatPlanText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                <TextBlock Text="{Binding [Analysis.ChatConfirm], Source={x:Static services:Locator.L10n}}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ui:Button Grid.Column="1" Content="{Binding [Analysis.ChatExecute], Source={x:Static services:Locator.L10n}}"
+                                       Command="{Binding ExecuteChatPlanCommand}" Appearance="Primary" MinWidth="110"
+                                       VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </Grid>
+                    </Border>
+                    <Grid Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding ChatInput, UpdateSourceTrigger=PropertyChanged}" MinHeight="42"
+                                 AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                 ToolTip="{Binding [Analysis.ChatPlaceholder], Source={x:Static services:Locator.L10n}}"/>
+                        <ui:Button Grid.Column="1" Content="{Binding [Analysis.ChatSend], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding SendChatCommand}" Appearance="Primary" MinWidth="90" Margin="8,0,0,0"/>
+                    </Grid>
                 </StackPanel>
-            </ui:Card>
-            <!-- 无档案引导卡 -->
+            </ui:Card>            <!-- 无档案引导卡 -->
             <ui:Card Margin="0,4"
                      Visibility="{Binding HasProfile, Converter={StaticResource InverseBoolToVis}}">
                 <TextBlock Margin="16" Text="{Binding [Analysis.NoProfile], Source={x:Static services:Locator.L10n}}"
@@ -151,3 +200,4 @@
         </StackPanel>
     </ScrollViewer>
 </Page>
+
