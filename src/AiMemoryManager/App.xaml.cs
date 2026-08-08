@@ -77,7 +77,14 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        new MainWindow().Show();
+        var mainWindow = new MainWindow();
+        mainWindow.Show();
+
+        // FR-8.5 全局热键:窗口句柄就绪后注册;被其他程序占用时静默降级,仅记录日志
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(mainWindow).Handle;
+        if (hwnd != IntPtr.Zero &&
+            !Locator.Hotkey.Register(hwnd, Locator.Settings.Current.HotkeyModifiers, Locator.Settings.Current.HotkeyKey))
+            System.Diagnostics.Debug.WriteLine("[Hotkey] Register failed: hotkey occupied by another app");
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -85,6 +92,7 @@ public partial class App : Application
         _ruleTimer?.Stop();
         _analysisTimer?.Stop();
         _leakTimer?.Stop();
+        if (Locator.Hotkey is not null) Locator.Hotkey.Dispose();   // FR-8.5:退出前注销全局热键
         if (Locator.Monitor is not null) Locator.Monitor.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);

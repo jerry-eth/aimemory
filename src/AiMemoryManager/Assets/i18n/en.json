@@ -23,6 +23,8 @@
   "Settings.Animations": "UI Animations", "Settings.About": "About",
   "Settings.AutoStart": "Launch at Startup", "Settings.AutoStartDesc": "Start automatically when you sign in to Windows (minimized to tray)",
   "Settings.Notifications": "Notifications", "Settings.NotificationsDesc": "Master switch for in-app notifications (clean results, leak alerts)",
+  "Settings.Hotkey": "Global Hotkey", "Settings.HotkeyHint": "Click the box, then press a key combo (must include Ctrl/Shift/Alt/Win)",
+  "Settings.HotkeyFail": "Hotkey registration failed: it may be in use by another app",
   "Tray.Clean": "Clean Now", "Tray.Open": "Open Main Window", "Tray.Exit": "Exit",
   "Tray.ToolTip": "Memory used {0}%",
   "Clean.Done": "Clean complete, freed {0} MB",

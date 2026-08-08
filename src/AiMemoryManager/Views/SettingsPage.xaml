@@ -5,6 +5,9 @@
       xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Settings], Source={x:Static services:Locator.L10n}}">
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Page.Resources>
     <Page.DataContext>
         <vm:SettingsViewModel/>
     </Page.DataContext>
@@ -69,6 +72,28 @@
                                    FontSize="12" Margin="0,2,0,0"/>
                     </StackPanel>
                     <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding NotificationsEnabled}"/>
+                </Grid>
+            </ui:Card>
+            <!-- 全局热键卡 -->
+            <ui:Card Margin="0,4">
+                <Grid Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding [Settings.Hotkey], Source={x:Static services:Locator.L10n}}"/>
+                        <TextBlock Text="{Binding [Settings.HotkeyHint], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="12" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding [Settings.HotkeyFail], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                   FontSize="12" Margin="0,2,0,0"
+                                   Visibility="{Binding HotkeyFailed, Converter={StaticResource BoolToVis}}"/>
+                    </StackPanel>
+                    <TextBox Grid.Column="1" Width="160" IsReadOnly="True" Text="{Binding HotkeyText}"
+                             VerticalContentAlignment="Center"
+                             PreviewKeyDown="OnHotkeyPreviewKeyDown"/>
                 </Grid>
             </ui:Card>
             <!-- 关于卡 -->

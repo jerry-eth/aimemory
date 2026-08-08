@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using AiMemoryManager.Services;
 
@@ -72,6 +73,26 @@ public partial class SettingsViewModel : ObservableObject
             Locator.Settings.Save();
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>FR-8.5 当前热键显示文本,如 "Ctrl+Shift+M"。</summary>
+    public string HotkeyText => HotkeyService.Format(
+        Locator.Settings.Current.HotkeyModifiers, Locator.Settings.Current.HotkeyKey);
+
+    [ObservableProperty]
+    private bool _hotkeyFailed;   // 热键被占用时设置页提示
+
+    /// <summary>FR-8.5 改键:写入设置并按当前主窗口句柄重新注册;失败(被占用)置 HotkeyFailed 降级提示。</summary>
+    public void SetHotkey(int modifiers, int key)
+    {
+        Locator.Settings.Current.HotkeyModifiers = modifiers;
+        Locator.Settings.Current.HotkeyKey = key;
+        Locator.Settings.Save();
+        HotkeyFailed = false;
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(Application.Current.MainWindow).Handle;
+        if (hwnd != IntPtr.Zero && !Locator.Hotkey.Register(hwnd, modifiers, key))
+            HotkeyFailed = true;
+        OnPropertyChanged(nameof(HotkeyText));
     }
 
     public string VersionText

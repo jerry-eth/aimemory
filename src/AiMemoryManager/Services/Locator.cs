@@ -31,6 +31,7 @@ public static class Locator
     public static UnsavedStateDetector Unsaved { get; private set; } = null!;
     public static ProcessTerminateService Terminator { get; private set; } = null!;
     public static StartupService Startup { get; private set; } = null!;
+    public static HotkeyService Hotkey { get; private set; } = null!;
 
     public static void Init()
     {
@@ -70,6 +71,8 @@ public static class Locator
         // 启动时按设置同步一次注册表(设置开但键被外部删除 → 补写;设置关但键残留 → 清掉)
         if (Settings.Current.AutoStartEnabled != Startup.IsEnabled)
             Startup.SetEnabled(Settings.Current.AutoStartEnabled);
+
+        Hotkey = new HotkeyService();   // FR-8.5:窗口句柄就绪后由 App 注册
 
         // 只有 CleanService 在 Locator 记录清理历史;Terminator 的历史由调用方 VM 记(进程页 Manual/分析页 Analysis),避免双记
         Clean.CleanCompleted += (_, r) => History.Record(

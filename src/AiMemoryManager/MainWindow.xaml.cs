@@ -44,6 +44,34 @@ public partial class MainWindow : FluentWindow
                 string.Format(Locator.L10n["Leak.Alert"], alert.ProcessName, alert.GrowthBytes / (1 << 20)),
                 H.NotifyIcon.Core.NotificationIcon.Warning);
         });
+
+        // FR-8.5 全局热键:WndProc 钩子已运行在 UI 线程,仍经 Dispatcher 封送与托盘清理保持同一模式
+        Locator.Hotkey.Pressed += (_, _) => Dispatcher.BeginInvoke(async () =>
+        {
+            // async void 处理器:必须自吞异常,清理失败不能拖垮进程
+            try
+            {
+                var r = await Locator.Clean.RunL1Async(CleanTrigger.Manual);
+                if (Locator.Settings.Current.NotificationsEnabled)   // FR-8.4 通知总闸
+                    Tray.ShowNotification(Locator.L10n["App.Title"],
+                        string.Format(Locator.L10n["Clean.Done"], r.FreedBytes / (1 << 20)),
+                        H.NotifyIcon.Core.NotificationIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                if (Locator.Settings.Current.NotificationsEnabled)
+                    Tray.ShowNotification(Locator.L10n["App.Title"], ex.Message,
+                        H.NotifyIcon.Core.NotificationIcon.Error);
+            }
+        });
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // FR-8.5:句柄创建后挂 WndProc 钩子,WM_HOTKEY 由 HotkeyService 分发
+        var helper = new System.Windows.Interop.WindowInteropHelper(this);
+        System.Windows.Interop.HwndSource.FromHwnd(helper.Handle)?.AddHook(Locator.Hotkey.WndProc);
     }
 
     private void UpdateTray(double percent)
