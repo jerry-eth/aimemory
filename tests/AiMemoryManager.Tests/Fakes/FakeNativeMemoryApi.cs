@@ -21,4 +21,19 @@ public class FakeNativeMemoryApi : INativeMemoryApi
     }
     public int GetForegroundPid() => ForegroundPid;
     public bool IsFullscreenAppActive() => FullscreenActive;
+
+    public Func<int, (bool, int)>? TerminateBehavior { get; set; }
+    public List<int> TerminatedPids { get; } = new();
+    public Dictionary<int, List<string>> WindowTitles { get; } = new();
+
+    public bool TryTerminateProcess(int pid, out int win32Error)
+    {
+        TerminatedPids.Add(pid);
+        var (ok, err) = TerminateBehavior?.Invoke(pid) ?? (true, 0);
+        win32Error = err;
+        return ok;
+    }
+
+    public IReadOnlyList<string> GetWindowTitles(int pid) =>
+        WindowTitles.TryGetValue(pid, out var titles) ? titles : new List<string>();
 }

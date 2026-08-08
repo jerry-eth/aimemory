@@ -25,4 +25,11 @@ public class AppSettings
     public bool LeakDetectionEnabled { get; set; } = true;
     public int LeakGrowthThresholdMb { get; set; } = 500;
     public int LeakWindowMinutes { get; set; } = 30;
+
+    // M3:L3 终止与系统设置
+    public List<string> NoKillProcesses { get; set; } = new();   // FR-7.2 防误杀名单
+    public bool AutoStartEnabled { get; set; } = false;          // FR-8.3
+    public bool NotificationsEnabled { get; set; } = true;       // FR-8.4
+    public int HotkeyModifiers { get; set; } = 0x0002 | 0x0004;  // FR-8.5: MOD_CONTROL|MOD_SHIFT
+    public int HotkeyKey { get; set; } = 0x4D;                   // 'M'
 }

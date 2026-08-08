@@ -9,4 +9,6 @@ public interface INativeMemoryApi
     long EmptyWorkingSets(IReadOnlyCollection<int> pids); // 返回估算释放字节数
     int GetForegroundPid();
     bool IsFullscreenAppActive();
+    bool TryTerminateProcess(int pid, out int win32Error);
+    IReadOnlyList<string> GetWindowTitles(int pid);
 }
