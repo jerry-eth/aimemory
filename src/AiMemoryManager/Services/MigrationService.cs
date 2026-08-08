@@ -81,6 +81,9 @@ public class MigrationService
             throw new InvalidOperationException($"文件夹被运行中进程占用,无法迁移: {string.Join(", ", blocking)}");
 
         string target = Path.Combine(targetRoot, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)));
+        // 执行端强制重查(评审修复):解析后的完整目标路径同样不得落在受保护目录下,拒绝在 robocopy 启动之前
+        if (SystemPathGuard.IsProtected(target))
+            throw new InvalidOperationException($"目标为系统路径,禁止迁移: {target}");
         if (Directory.Exists(target) || File.Exists(target))
             throw new InvalidOperationException($"目标已存在: {target}");
 
@@ -116,6 +119,10 @@ public class MigrationService
 
     private bool Revert(MigrationLogEntry entry)
     {
+        // 执行端强制重查(评审修复):日志是磁盘可编辑 JSON,被篡改/损坏的条目
+        // 不得导致永久删除或写回系统路径;任一路径受保护即拒绝,不做任何动作
+        if (SystemPathGuard.IsProtected(entry.Target) || SystemPathGuard.IsProtected(entry.Junction))
+            return false;
         try
         {
             // ① 删 junction:真实环境 junction 是目录(reparse point),

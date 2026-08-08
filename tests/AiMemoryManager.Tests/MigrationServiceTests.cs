@@ -73,4 +73,25 @@ public class MigrationServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_src, "a.dat")));   // 移回
         Assert.True(svc.Log[0].Reverted);
     }
+
+    [Fact] public async Task 回退_目标为受保护系统路径直接拒绝()
+    {
+        // 日志是磁盘可编辑 JSON:被篡改条目的 Target 指向系统路径时,执行端必须拒绝,runner 不得被调用
+        var svc = Svc();
+        var entry = new MigrationLogEntry(DateTimeOffset.Now, _src,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "amm-fake"),
+            _src, false);
+        Assert.False(await svc.RevertAsync(entry));
+        Assert.Empty(_runs);                                     // robocopy/mklink 均未执行
+        Assert.True(File.Exists(Path.Combine(_src, "a.dat")));   // 现场未被改动
+    }
+
+    [Fact] public async Task 迁移_目标落在受保护系统路径在复制前拒绝()
+    {
+        var svc = Svc();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MigrateAsync(_src,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")));
+        Assert.Empty(_runs);                                     // robocopy 未启动
+        Assert.True(File.Exists(Path.Combine(_src, "a.dat")));   // 源目录原样保留
+    }
 }
