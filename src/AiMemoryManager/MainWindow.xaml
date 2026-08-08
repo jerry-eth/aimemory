@@ -36,6 +36,9 @@
                 <ui:NavigationViewItem Content="{Binding [Nav.Llm], Source={x:Static services:Locator.L10n}}"
                                        Tag="llm" TargetPageType="{x:Type views:LlmSettingsPage}"
                                        Icon="{ui:SymbolIcon Bot24}"/>
+                <ui:NavigationViewItem Content="{Binding [Nav.CSlim], Source={x:Static services:Locator.L10n}}"
+                                       Tag="cslim" TargetPageType="{x:Type views:CSlimPage}"
+                                       Icon="{ui:SymbolIcon HardDrive24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.TokenStats], Source={x:Static services:Locator.L10n}}"
                                        Tag="tokens" TargetPageType="{x:Type views:TokenStatsPage}"
                                        Icon="{ui:SymbolIcon DataUsage24}"/>

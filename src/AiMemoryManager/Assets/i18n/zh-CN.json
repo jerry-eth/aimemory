@@ -104,5 +104,19 @@
   "Dash.HistoryEmpty": "暂无清理记录",
   "Dash.Level.L1": "轻量清理", "Dash.Level.L2": "深度清理", "Dash.Level.L3": "结束进程",
   "Dash.Trigger.Manual": "手动", "Dash.Trigger.RuleThreshold": "阈值规则",
-  "Dash.Trigger.RuleTimer": "定时规则", "Dash.Trigger.Tray": "托盘", "Dash.Trigger.Analysis": "智能分析"
+  "Dash.Trigger.RuleTimer": "定时规则", "Dash.Trigger.Tray": "托盘", "Dash.Trigger.Analysis": "智能分析",
+  "Nav.CSlim": "C 盘瘦身",
+  "Slim.Scan": "扫描占用", "Slim.Scanning": "扫描中…", "Slim.Size": "大小", "Slim.Category": "类别",
+  "Slim.FileCount": "文件数",
+  "Slim.Analyze": "LLM 分析", "Slim.NoProfile": "请先配置大模型", "Slim.Advice": "分析建议",
+  "Slim.Cleanable": "可清理项", "Slim.Migratable": "可迁移项", "Slim.Reason": "理由", "Slim.EstFree": "预估释放",
+  "Slim.TargetDrive": "目标盘", "Slim.DeleteSelected": "删除选中(入回收站)", "Slim.MigrateSelected": "迁移选中",
+  "Slim.ConfirmDelete": "将把 {0} 项移入回收站,可从回收站恢复。继续?",
+  "Slim.ConfirmMigrate": "将迁移 {0} 项到 {1},原位置保留链接,源文件经复制校验后永久删除(不进回收站)。继续?",
+  "Slim.Blocked": "以下项被进程占用,请先关闭:{0}",
+  "Slim.DeleteDone": "已移入回收站 {0} 项", "Slim.MigrateDone": "已迁移 {0} 项",
+  "Slim.MigrateLog": "迁移记录", "Slim.Revert": "回退", "Slim.Reverted": "已回退", "Slim.RevertDone": "已回退 {0}",
+  "Slim.RevertFailed": "回退失败",
+  "Slim.Col.Source": "源", "Slim.Col.Target": "目标",
+  "Slim.Protected": "系统保护路径,不可操作", "Slim.Empty": "暂无数据,请先扫描"
 }

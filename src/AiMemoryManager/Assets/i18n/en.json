@@ -104,5 +104,19 @@
   "Dash.HistoryEmpty": "No clean history yet",
   "Dash.Level.L1": "Light Clean", "Dash.Level.L2": "Deep Clean", "Dash.Level.L3": "End Processes",
   "Dash.Trigger.Manual": "Manual", "Dash.Trigger.RuleThreshold": "Threshold Rule",
-  "Dash.Trigger.RuleTimer": "Timer Rule", "Dash.Trigger.Tray": "Tray", "Dash.Trigger.Analysis": "Smart Analysis"
+  "Dash.Trigger.RuleTimer": "Timer Rule", "Dash.Trigger.Tray": "Tray", "Dash.Trigger.Analysis": "Smart Analysis",
+  "Nav.CSlim": "Drive C Slimmer",
+  "Slim.Scan": "Scan Usage", "Slim.Scanning": "Scanning...", "Slim.Size": "Size", "Slim.Category": "Category",
+  "Slim.FileCount": "Files",
+  "Slim.Analyze": "LLM Analysis", "Slim.NoProfile": "Configure an LLM profile first", "Slim.Advice": "Analysis Advice",
+  "Slim.Cleanable": "Cleanable Items", "Slim.Migratable": "Migratable Items", "Slim.Reason": "Reason", "Slim.EstFree": "Est. Free",
+  "Slim.TargetDrive": "Target Drive", "Slim.DeleteSelected": "Delete Selected (to Recycle Bin)", "Slim.MigrateSelected": "Migrate Selected",
+  "Slim.ConfirmDelete": "{0} item(s) will be moved to the Recycle Bin and can be restored from there. Continue?",
+  "Slim.ConfirmMigrate": "{0} item(s) will be migrated to {1}; a link remains at the original location, and source files are permanently deleted after copy verification (NOT sent to the Recycle Bin). Continue?",
+  "Slim.Blocked": "These items are in use by running processes; close them first: {0}",
+  "Slim.DeleteDone": "Moved {0} item(s) to the Recycle Bin", "Slim.MigrateDone": "Migrated {0} item(s)",
+  "Slim.MigrateLog": "Migration Log", "Slim.Revert": "Revert", "Slim.Reverted": "Reverted", "Slim.RevertDone": "Reverted {0}",
+  "Slim.RevertFailed": "Revert failed",
+  "Slim.Col.Source": "Source", "Slim.Col.Target": "Target",
+  "Slim.Protected": "System-protected path; operation not allowed", "Slim.Empty": "No data yet. Run a scan first."
 }

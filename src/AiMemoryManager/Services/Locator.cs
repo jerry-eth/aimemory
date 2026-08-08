@@ -32,6 +32,10 @@ public static class Locator
     public static ProcessTerminateService Terminator { get; private set; } = null!;
     public static StartupService Startup { get; private set; } = null!;
     public static HotkeyService Hotkey { get; private set; } = null!;
+    public static DiskScanService DiskScan { get; private set; } = null!;
+    public static DiskAdviceService DiskAdvice { get; private set; } = null!;
+    public static RecycleBinDeleteService RecycleBin { get; private set; } = null!;
+    public static MigrationService Migration { get; private set; } = null!;
 
     public static void Init()
     {
@@ -74,8 +78,25 @@ public static class Locator
 
         Hotkey = new HotkeyService();   // FR-8.5:窗口句柄就绪后由 App 注册
 
+        // M3 FR-12:C 盘瘦身四服务(扫描/LLM 建议/回收站删除/跨盘迁移)
+        DiskScan = new DiskScanService();
+        RecycleBin = new RecycleBinDeleteService();
+        Migration = new MigrationService(Native, MigrationService.DefaultLogPath());
+        DiskAdvice = new DiskAdviceService(Profiles, LlmClient, L10n, TokenStats, GetAvailableFixedDrives());
+
         // 只有 CleanService 在 Locator 记录清理历史;Terminator 的历史由调用方 VM 记(进程页 Manual/分析页 Analysis),避免双记
         Clean.CleanCompleted += (_, r) => History.Record(
             new CleanHistoryEntry(r.Time, r.Level, r.FreedBytes, r.ProcessCount, r.Trigger));
+    }
+
+    /// <summary>FR-12 可用固定盘:Fixed + Ready + 非系统盘(DiskAdviceService 迁移目标盘过滤用)。</summary>
+    private static IReadOnlyList<string> GetAvailableFixedDrives()
+    {
+        string sysRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.System)) ?? @"C:\";
+        return DriveInfo.GetDrives()
+            .Where(d => d.DriveType == DriveType.Fixed && d.IsReady
+                && !string.Equals(d.Name.TrimEnd('\\'), sysRoot.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            .Select(d => d.Name)
+            .ToList();
     }
 }
