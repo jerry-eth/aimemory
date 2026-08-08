@@ -59,6 +59,8 @@ public class AnalysisService
             var suggestions = AnalysisResultParser.Parse(resp.Content)
                 .Where(s => !_whitelist.IsExcluded(s.ProcessName))
                 .Where(s => !_whitelist.IsSystemCritical(s.ProcessName))
+                // FR-7.2:防误杀名单进程永不进入 L3(terminate)候选,compress 建议不受影响
+                .Where(s => s.Action != "terminate" || !_whitelist.IsNoKill(s.ProcessName))
                 .ToList();
 
             // 5. Token 记录 + 缓存

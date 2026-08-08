@@ -46,6 +46,9 @@ public class AnalysisServiceTests : IDisposable
                 new(1, "chrome", @"C:\chrome.exe", 900L << 20, true),
                 new(2, "csrss", null, 200L << 20, false),
                 new(3, "myapp", null, 300L << 20, true),
+                // 偏差说明:brief 追加用例需要 game 出现在快照中(防误杀名单过滤 terminate 建议),
+                // 按既有 fixture 模式最小调整,仅新增此进程,不影响既有断言。
+                new(4, "game", null, 500L << 20, true),
             },
             ForegroundPid = -1
         };
@@ -138,6 +141,15 @@ public class AnalysisServiceTests : IDisposable
         Assert.Contains("别动游戏", _client.LastSystemPrompt);
         Assert.Contains("chrome", _client.LastSystemPrompt);      // 进程 JSON 已注入系统提示词
         Assert.Contains("lang=中文", _client.LastSystemPrompt);
+    }
+
+    [Fact] public async Task 防误杀名单过滤terminate建议()
+    {
+        _wl.AddNoKill("game");
+        _client.Reply = """{"suggestions":[{"process":"game","action":"terminate","reason":"可关","risk":"low"},{"process":"chrome","action":"compress","reason":"高","risk":"low"}]}""";
+        var r = await _svc.AnalyzeAsync(AnalysisTrigger.Manual);
+        var s = Assert.Single(r.Suggestions);      // game 的 terminate 被滤掉
+        Assert.Equal("chrome", s.ProcessName);
     }
 
     [Fact] public async Task forceRefresh跳过缓存重新调LLM但仍写缓存()
