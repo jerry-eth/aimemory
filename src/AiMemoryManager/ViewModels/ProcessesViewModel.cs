@@ -42,32 +42,64 @@ public partial class ProcessesViewModel : ObservableObject
     /// <summary>终止/恢复的结果状态文本。</summary>
     [ObservableProperty] private string _statusText = "";
 
+    /// <summary>进程枚举在线程池执行,避免 System.Diagnostics.Process 的权限查询阻塞界面线程。</summary>
+    [ObservableProperty] private bool _isRefreshing;
+
     /// <summary>重新枚举进程:只列工作集 &gt; 10MB 的,按内存降序。</summary>
     [RelayCommand]
-    private void Refresh()
+    private async Task RefreshAsync()
     {
-        var snaps = Locator.Native.GetProcessSnapshots()
-            .Where(p => p.WorkingSetBytes > 10L << 20)
-            .OrderByDescending(p => p.WorkingSetBytes)
-            .ToList();
-        // 可终止判定批量算一次(内部含一次快照),再按 PID 映射回行,避免逐行重复快照
-        var killable = Locator.Terminator.FilterCandidates(snaps.Select(p => p.Pid).ToList()).ToHashSet();
-        Items.Clear();
-        foreach (var p in snaps)
+        if (IsRefreshing) return;
+        IsRefreshing = true;
+        try
         {
-            var item = new ProcessItemViewModel
+            // Process.MainModule/FileName 可能因权限或退出中的进程而变慢,绝不能在 UI 线程执行。
+            var rows = await Task.Run(() =>
             {
-                Snapshot = p,
-                IsExcluded = Locator.Whitelist.IsExcluded(p.Name),
-                IsCritical = Locator.Whitelist.IsSystemCritical(p.Name),
-                CanKill = killable.Contains(p.Pid)
-            };
-            item.PropertyChanged += OnItemPropertyChanged;
-            Items.Add(item);
+                var snaps = Locator.Native.GetProcessSnapshots()
+                    .Where(p => p.WorkingSetBytes > 10L << 20)
+                    .OrderByDescending(p => p.WorkingSetBytes)
+                    .ToList();
+                // 可终止判定批量算一次(内部含一次快照),再按 PID 映射回行,避免逐行重复快照
+                var killable = Locator.Terminator.FilterCandidates(snaps.Select(p => p.Pid).ToList()).ToHashSet();
+                return snaps.Select(p => new ProcessRowData(
+                    p,
+                    Locator.Whitelist.IsExcluded(p.Name),
+                    Locator.Whitelist.IsSystemCritical(p.Name),
+                    killable.Contains(p.Pid))).ToList();
+            });
+
+            Items.Clear();
+            foreach (var row in rows)
+            {
+                var item = new ProcessItemViewModel
+                {
+                    Snapshot = row.Snapshot,
+                    IsExcluded = row.IsExcluded,
+                    IsCritical = row.IsCritical,
+                    CanKill = row.CanKill
+                };
+                item.PropertyChanged += OnItemPropertyChanged;
+                Items.Add(item);
+            }
+            RefreshKillLog();
+            TerminateSelectedCommand.NotifyCanExecuteChanged();
         }
-        RefreshKillLog();
-        TerminateSelectedCommand.NotifyCanExecuteChanged();
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+        finally
+        {
+            IsRefreshing = false;
+        }
     }
+
+    private sealed record ProcessRowData(
+        ProcessSnapshot Snapshot,
+        bool IsExcluded,
+        bool IsCritical,
+        bool CanKill);
 
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -102,7 +134,7 @@ public partial class ProcessesViewModel : ObservableObject
                 Locator.History.Record(new CleanHistoryEntry(
                     DateTimeOffset.Now, CleanLevel.L3, r.FreedBytes, ok, CleanTrigger.Manual));
             StatusText = string.Format(Locator.L10n["L3.Result"], ok, r.FreedBytes / (1 << 20), fail);
-            Refresh();
+            await RefreshAsync();
         }
         catch (Exception ex)
         {

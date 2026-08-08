@@ -91,7 +91,7 @@
                                    FontSize="12" Margin="0,2,0,0"
                                    Visibility="{Binding HotkeyFailed, Converter={StaticResource BoolToVis}}"/>
                     </StackPanel>
-                    <TextBox Grid.Column="1" Width="160" IsReadOnly="True" Text="{Binding HotkeyText}"
+                    <TextBox Grid.Column="1" Width="160" IsReadOnly="True" Text="{Binding HotkeyText, Mode=OneWay}"
                              VerticalContentAlignment="Center"
                              PreviewKeyDown="OnHotkeyPreviewKeyDown"/>
                 </Grid>

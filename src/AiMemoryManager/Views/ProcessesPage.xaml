@@ -11,7 +11,7 @@
     <Page.DataContext>
         <vm:ProcessesViewModel/>
     </Page.DataContext>
-    <Grid Margin="24">
+    <Grid Margin="24" MinWidth="760">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -34,6 +34,7 @@
                   RowBackground="{x:Null}" AlternatingRowBackground="{x:Null}"
                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                   HorizontalGridLinesBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   Margin="0,12,0,0">
             <DataGrid.ColumnHeaderStyle>
                 <Style TargetType="DataGridColumnHeader">
