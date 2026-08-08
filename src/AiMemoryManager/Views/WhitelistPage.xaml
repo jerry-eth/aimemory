@@ -11,86 +11,195 @@
     <Page.DataContext>
         <vm:WhitelistViewModel/>
     </Page.DataContext>
-    <Grid Margin="24">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-        <StackPanel Orientation="Horizontal">
-            <ui:Button Content="{Binding [Whitelist.Import], Source={x:Static services:Locator.L10n}}"
-                       Command="{Binding ImportCommand}"/>
-            <ui:Button Content="{Binding [Whitelist.Export], Source={x:Static services:Locator.L10n}}"
-                       Command="{Binding ExportCommand}" Margin="8,0,0,0"/>
-        </StackPanel>
-        <Grid Grid.Row="1" Margin="0,12,0,0">
-            <ListView ItemsSource="{Binding Items}"
-                      Visibility="{Binding HasItems, Converter={StaticResource BoolToVis}}">
-                <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
-                            <ui:Button Grid.Column="1"
-                                       Content="{Binding [Whitelist.Remove], Source={x:Static services:Locator.L10n}}"
-                                       Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                       CommandParameter="{Binding}"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-            <TextBlock Text="{Binding [Whitelist.Empty], Source={x:Static services:Locator.L10n}}"
-                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                  PanningMode="VerticalOnly">
+        <StackPanel Margin="24" MinWidth="720">
+            <TextBlock Text="{Binding [Whitelist.Title], Source={x:Static services:Locator.L10n}}"
+                       FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding [Whitelist.Desc], Source={x:Static services:Locator.L10n}}"
+                       TextWrapping="Wrap" Margin="0,4,0,0"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-        </Grid>
-        <!-- FR-7.2 防误杀名单:名单内进程永远不会被"结束进程"终止 -->
-        <ui:Card Grid.Row="2" Margin="0,12,0,0">
-            <Grid Margin="16">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <TextBlock Text="{Binding [WL.NoKillTitle], Source={x:Static services:Locator.L10n}}"
-                           FontWeight="SemiBold"/>
-                <TextBlock Grid.Row="1" Text="{Binding [WL.NoKillDesc], Source={x:Static services:Locator.L10n}}"
-                           TextWrapping="Wrap" Margin="0,4,0,0"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
-                    <ui:TextBox Width="240" Text="{Binding NewNoKillName, UpdateSourceTrigger=PropertyChanged}"
-                                PlaceholderText="notepad.exe"/>
-                    <ui:Button Content="{Binding [WL.NoKillAdd], Source={x:Static services:Locator.L10n}}"
-                               Command="{Binding AddNoKillCommand}" Margin="8,0,0,0"/>
-                </StackPanel>
-                <Grid Grid.Row="3" Margin="0,8,0,0">
-                    <ListView ItemsSource="{Binding NoKillItems}" MaxHeight="140"
-                              Visibility="{Binding NoKillHasItems, Converter={StaticResource BoolToVis}}">
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
-                                    <ui:Button Grid.Column="1"
-                                               Content="{Binding [Whitelist.Remove], Source={x:Static services:Locator.L10n}}"
-                                               Command="{Binding DataContext.RemoveNoKillCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
-                                               CommandParameter="{Binding}"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <TextBlock Text="{Binding [WL.NoKillEmpty], Source={x:Static services:Locator.L10n}}"
-                               Visibility="{Binding NoKillIsEmpty, Converter={StaticResource BoolToVis}}"
+
+            <ui:Card Margin="0,16,0,0">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding [Whitelist.ManualTitle], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0">
+                        <ui:TextBox Width="300" Text="{Binding NewName, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="notepad.exe"/>
+                        <ui:Button Content="{Binding [Whitelist.Add], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding AddCommand}" Margin="8,0,0,0"/>
+                        <ui:Button Content="{Binding [Whitelist.Import], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding ImportCommand}" Margin="8,0,0,0"/>
+                        <ui:Button Content="{Binding [Whitelist.Export], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding ExportCommand}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </ui:Card>
+
+            <ui:Card Margin="0,12,0,0">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding [Whitelist.AdviceTitle], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Row="1" Text="{Binding [Whitelist.AdviceDesc], Source={x:Static services:Locator.L10n}}"
+                               TextWrapping="Wrap" Margin="0,4,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
+                        <ui:Button Content="{Binding [Whitelist.Analyze], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding AnalyzeAdviceCommand}"/>
+                        <ui:Button Content="{Binding [Whitelist.AddSelected], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding AddSelectedAdviceCommand}" Margin="8,0,0,0"/>
+                        <ProgressBar Width="120" Height="4" IsIndeterminate="True"
+                                     Visibility="{Binding IsAnalyzingAdvice, Converter={StaticResource BoolToVis}}"
+                                     VerticalAlignment="Center" Margin="14,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Grid.Row="3" Text="{Binding StatusText}" TextWrapping="Wrap" Margin="0,8,0,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </Grid>
-            </Grid>
-        </ui:Card>
-    </Grid>
+            </ui:Card>
+
+            <ui:Card Margin="0,12,0,0">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding [Whitelist.AdviceListTitle], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <Grid Grid.Row="1" Margin="0,8,0,0">
+                        <ListView ItemsSource="{Binding AdviceItems}" MaxHeight="330" HorizontalContentAlignment="Stretch"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  Visibility="{Binding HasAdviceItems, Converter={StaticResource BoolToVis}}">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,5">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="190"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" Margin="0,2,10,0"/>
+                                        <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                                            <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding MemoryText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="{Binding PathText}" TextWrapping="Wrap"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Reason}" TextWrapping="Wrap" Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="3" Margin="12,0,0,0">
+                                            <TextBlock Text="{Binding [Whitelist.AdviceRecommended], Source={x:Static services:Locator.L10n}}"
+                                                       Foreground="Green" Visibility="{Binding Recommended, Converter={StaticResource BoolToVis}}"/>
+                                            <TextBlock Text="{Binding [Whitelist.AdviceNotRecommended], Source={x:Static services:Locator.L10n}}"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       Visibility="{Binding NotRecommended, Converter={StaticResource BoolToVis}}"/>
+                                            <TextBlock Text="{Binding [Whitelist.AdviceAdded], Source={x:Static services:Locator.L10n}}"
+                                                       Foreground="Green" Visibility="{Binding IsAdded, Converter={StaticResource BoolToVis}}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock Text="{Binding [Whitelist.AdviceEmpty], Source={x:Static services:Locator.L10n}}"
+                                   Visibility="{Binding AdviceIsEmpty, Converter={StaticResource BoolToVis}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+                </Grid>
+            </ui:Card>
+
+            <ui:Card Margin="0,12,0,0">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding [Whitelist.CurrentTitle], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <Grid Grid.Row="1" Margin="0,8,0,0">
+                        <ListView ItemsSource="{Binding Items}" MaxHeight="240" HorizontalContentAlignment="Stretch"
+                                  Visibility="{Binding HasItems, Converter={StaticResource BoolToVis}}">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <ui:Button Grid.Column="1"
+                                                   Content="{Binding [Whitelist.Remove], Source={x:Static services:Locator.L10n}}"
+                                                   Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                   CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock Text="{Binding [Whitelist.Empty], Source={x:Static services:Locator.L10n}}"
+                                   Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+                </Grid>
+            </ui:Card>
+
+            <!-- FR-7.2 防误杀名单:名单内进程永远不会被“结束进程”终止 -->
+            <ui:Card Margin="0,12,0,16">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="{Binding [WL.NoKillTitle], Source={x:Static services:Locator.L10n}}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Row="1" Text="{Binding [WL.NoKillDesc], Source={x:Static services:Locator.L10n}}"
+                               TextWrapping="Wrap" Margin="0,4,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                        <ui:TextBox Width="300" Text="{Binding NewNoKillName, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="notepad.exe"/>
+                        <ui:Button Content="{Binding [WL.NoKillAdd], Source={x:Static services:Locator.L10n}}"
+                                   Command="{Binding AddNoKillCommand}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <Grid Grid.Row="3" Margin="0,8,0,0">
+                        <ListView ItemsSource="{Binding NoKillItems}" MaxHeight="180" HorizontalContentAlignment="Stretch"
+                                  Visibility="{Binding NoKillHasItems, Converter={StaticResource BoolToVis}}">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        <ui:Button Grid.Column="1"
+                                                   Content="{Binding [Whitelist.Remove], Source={x:Static services:Locator.L10n}}"
+                                                   Command="{Binding DataContext.RemoveNoKillCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                                   CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock Text="{Binding [WL.NoKillEmpty], Source={x:Static services:Locator.L10n}}"
+                                   Visibility="{Binding NoKillIsEmpty, Converter={StaticResource BoolToVis}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+                </Grid>
+            </ui:Card>
+        </StackPanel>
+    </ScrollViewer>
 </Page>

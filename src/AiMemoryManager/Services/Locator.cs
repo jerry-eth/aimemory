@@ -36,6 +36,7 @@ public static class Locator
     public static DiskAdviceService DiskAdvice { get; private set; } = null!;
     public static RecycleBinDeleteService RecycleBin { get; private set; } = null!;
     public static MigrationService Migration { get; private set; } = null!;
+    public static WhitelistAdviceService WhitelistAdvice { get; private set; } = null!;
 
     public static void Init()
     {
@@ -83,6 +84,7 @@ public static class Locator
         RecycleBin = new RecycleBinDeleteService();
         Migration = new MigrationService(Native, MigrationService.DefaultLogPath());
         DiskAdvice = new DiskAdviceService(Profiles, LlmClient, L10n, TokenStats, GetAvailableFixedDrives());
+        WhitelistAdvice = new WhitelistAdviceService(Native, Whitelist, Profiles, LlmClient, TokenStats);
 
         // 只有 CleanService 在 Locator 记录清理历史;Terminator 的历史由调用方 VM 记(进程页 Manual/分析页 Analysis),避免双记
         Clean.CleanCompleted += (_, r) => History.Record(
