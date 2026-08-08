@@ -6,6 +6,8 @@ using AiMemoryManager.Services;
 
 namespace AiMemoryManager.ViewModels;
 
+public sealed record LlmPreset(string DisplayName, string BaseUrl, string Model);
+
 public partial class ProfileItemViewModel : ObservableObject
 {
     public required LlmProfile Profile { get; init; }
@@ -25,6 +27,7 @@ public partial class LlmSettingsViewModel : ObservableObject
 
     public ObservableCollection<ProfileItemViewModel> Profiles { get; } = new();
     public ObservableCollection<string> ModelSuggestions { get; } = new();
+    public ObservableCollection<LlmPreset> Presets { get; } = new();
     public ObservableCollection<PromptTemplate> Templates { get; } = new();
 
     // 编辑表单(新增/编辑共用)
@@ -33,6 +36,7 @@ public partial class LlmSettingsViewModel : ObservableObject
     [ObservableProperty] private string _editBaseUrl = "https://api.deepseek.com/v1";
     [ObservableProperty] private string _editApiKey = "";        // 明文仅存在于表单,保存即加密
     [ObservableProperty] private string _editModel = "";
+    [ObservableProperty] private LlmPreset? _selectedPreset;
     [ObservableProperty] private string _testResult = "";
     [ObservableProperty] private bool _isTesting;
 
@@ -58,8 +62,32 @@ public partial class LlmSettingsViewModel : ObservableObject
 
     public LlmSettingsViewModel()
     {
+        LoadPresets();
         Refresh();
         ReloadTemplates();
+    }
+
+    private void LoadPresets()
+    {
+        Presets.Clear();
+        Presets.Add(new("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat"));
+        Presets.Add(new("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"));
+        Presets.Add(new("Qwen / DashScope", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus"));
+        Presets.Add(new("Kimi / Moonshot", "https://api.moonshot.cn/v1", "moonshot-v1-8k"));
+        Presets.Add(new("GLM / Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"));
+        Presets.Add(new("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini"));
+        Presets.Add(new("SiliconFlow", "https://api.siliconflow.cn/v1", "deepseek-ai/DeepSeek-V3"));
+        Presets.Add(new("Ollama (Local)", "http://localhost:11434/v1", "qwen2.5:7b"));
+    }
+
+    [RelayCommand]
+    private void ApplyPreset(LlmPreset? preset)
+    {
+        if (preset is null) return;
+        EditBaseUrl = preset.BaseUrl;
+        EditModel = preset.Model;
+        EditPrice = 0;
+        TestResult = "";
     }
 
     // ---------- 档案 ----------

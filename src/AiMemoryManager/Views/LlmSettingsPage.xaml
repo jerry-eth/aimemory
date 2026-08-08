@@ -12,7 +12,7 @@
         <vm:LlmSettingsViewModel/>
     </Page.DataContext>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
-        <StackPanel Margin="24">
+        <StackPanel Margin="24" MinWidth="900">
             <!-- 配置档案卡 -->
             <ui:Card Margin="0,4">
                 <StackPanel Margin="16">
@@ -62,11 +62,31 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+                    <!-- 常见服务快速配置:只填充地址和模型,不会自动填写或保存 API Key -->
+                    <StackPanel Margin="0,16,0,0">
+                        <TextBlock Text="{Binding [Llm.Presets], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox ItemsSource="{Binding Presets}"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedItem="{Binding SelectedPreset}"
+                                      MinWidth="420"/>
+                            <ui:Button Grid.Column="1" Content="{Binding [Llm.ApplyPreset], Source={x:Static services:Locator.L10n}}"
+                                       Command="{Binding ApplyPresetCommand}"
+                                       CommandParameter="{Binding SelectedPreset}" Margin="8,0,0,0"/>
+                        </Grid>
+                        <TextBlock Text="{Binding [Llm.PresetHint], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap" Margin="0,6,0,0"/>
+                    </StackPanel>
                     <!-- 编辑表单(新增/编辑共用) -->
                     <Grid Margin="0,16,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="140" MinWidth="140"/>
+                            <ColumnDefinition Width="*" MinWidth="480"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -78,21 +98,21 @@
                         <TextBlock Text="{Binding [Llm.Name], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="0,4,12,4"/>
                         <ui:TextBox Grid.Column="1" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
-                                    Margin="0,4"/>
+                                    Margin="0,4" MinWidth="480"/>
                         <TextBlock Grid.Row="1" Text="{Binding [Llm.BaseUrl], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="0,4,12,4"/>
                         <ui:TextBox Grid.Row="1" Grid.Column="1"
-                                    Text="{Binding EditBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4"/>
+                                    Text="{Binding EditBaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="0,4" MinWidth="480"/>
                         <TextBlock Grid.Row="2" Text="{Binding [Llm.ApiKey], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="0,4,12,4"/>
                         <ui:TextBox Grid.Row="2" Grid.Column="1"
                                     Text="{Binding EditApiKey, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="{Binding ApiKeyPlaceholder}" Margin="0,4"/>
+                                    PlaceholderText="{Binding ApiKeyPlaceholder}" Margin="0,4" MinWidth="480"/>
                         <TextBlock Grid.Row="3" Text="{Binding [Llm.Model], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="0,4,12,4"/>
                         <ComboBox Grid.Row="3" Grid.Column="1" IsEditable="True" Margin="0,4"
                                   ItemsSource="{Binding ModelSuggestions}"
-                                  Text="{Binding EditModel, UpdateSourceTrigger=PropertyChanged}"/>
+                                  Text="{Binding EditModel, UpdateSourceTrigger=PropertyChanged}" MinWidth="480"/>
                         <TextBlock Grid.Row="4" Text="{Binding [Llm.Price], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="0,4,12,4" TextWrapping="Wrap"/>
                         <ui:NumberBox Grid.Row="4" Grid.Column="1" Margin="0,4" HorizontalAlignment="Left" Width="160"

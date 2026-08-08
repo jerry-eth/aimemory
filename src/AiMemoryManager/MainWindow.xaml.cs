@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using AiMemoryManager.Models;
 using AiMemoryManager.Services;
 using AiMemoryManager.Views;
@@ -22,6 +24,7 @@ public partial class MainWindow : FluentWindow
     public MainWindow()
     {
         InitializeComponent();
+        PreviewMouseWheel += OnPreviewMouseWheel;
 
         Loaded += (_, _) =>
         {
@@ -66,6 +69,48 @@ public partial class MainWindow : FluentWindow
         });
     }
 
+    private void OnPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        // NavigationView 和部分页面控件可能会提前处理滚轮事件。这里从鼠标所在控件
+        // 向上寻找滚动容器，确保鼠标停在内容区域时也能滚动页面，而不必精准移到滚动条。
+        var scrollAmount = e.Delta / 120.0 * 48.0;
+        var current = e.OriginalSource as DependencyObject;
+
+        while (current is not null)
+        {
+            if (current is ScrollViewer viewer && TryScroll(viewer, scrollAmount))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            current = GetParent(current);
+        }
+    }
+
+    private static bool TryScroll(ScrollViewer viewer, double scrollAmount)
+    {
+        if (viewer.ScrollableHeight <= 0.5)
+            return false;
+
+        var oldOffset = viewer.VerticalOffset;
+        var newOffset = Math.Clamp(oldOffset - scrollAmount, 0, viewer.ScrollableHeight);
+
+        // 到达内部列表边缘时不拦截事件，让外层页面滚动容器继续接管滚轮。
+        if (Math.Abs(newOffset - oldOffset) < 0.5)
+            return false;
+
+        viewer.ScrollToVerticalOffset(newOffset);
+        return true;
+    }
+
+    private static DependencyObject? GetParent(DependencyObject child)
+    {
+        if (child is FrameworkContentElement contentElement)
+            return contentElement.Parent;
+
+        return VisualTreeHelper.GetParent(child);
+    }
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);

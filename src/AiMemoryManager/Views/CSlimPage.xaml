@@ -19,6 +19,16 @@
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
+        <Style x:Key="SlimCellText" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,0"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
         <Style x:Key="SlimGrid" TargetType="DataGrid">
             <Setter Property="AutoGenerateColumns" Value="False"/>
             <Setter Property="IsReadOnly" Value="True"/>
@@ -64,13 +74,13 @@
                               MaxHeight="320" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Path}" Width="3*"/>
+                                                Binding="{Binding Path}" Width="3*" MinWidth="280" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Size], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding SizeText}" Width="*"/>
+                                                Binding="{Binding SizeText}" Width="*" MinWidth="100" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Category], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Category}" Width="*"/>
+                                                Binding="{Binding Category}" Width="*" MinWidth="120" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.FileCount], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding FileCount}" Width="*"/>
+                                                Binding="{Binding FileCount}" Width="*" MinWidth="100" ElementStyle="{StaticResource SlimCellText}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>
@@ -85,11 +95,11 @@
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Width="40" CellTemplate="{StaticResource SelectCell}"/>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Path}" Width="3*"/>
+                                                Binding="{Binding Path}" Width="3*" MinWidth="280" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Reason], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Reason}" Width="2*"/>
+                                                Binding="{Binding Reason}" Width="2*" MinWidth="220" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.EstFree], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding EstText}" Width="*"/>
+                                                Binding="{Binding EstText}" Width="*" MinWidth="130" ElementStyle="{StaticResource SlimCellText}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <ui:Button Content="{Binding [Slim.DeleteSelected], Source={x:Static services:Locator.L10n}}"
@@ -107,11 +117,11 @@
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Width="40" CellTemplate="{StaticResource SelectCell}"/>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Path}" Width="3*"/>
+                                                Binding="{Binding Path}" Width="3*" MinWidth="280" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Reason], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Reason}" Width="2*"/>
+                                                Binding="{Binding Reason}" Width="2*" MinWidth="220" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.TargetDrive], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding TargetDrive}" Width="*"/>
+                                                Binding="{Binding TargetDrive}" Width="*" MinWidth="130" ElementStyle="{StaticResource SlimCellText}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                     <ui:Button Content="{Binding [Slim.MigrateSelected], Source={x:Static services:Locator.L10n}}"
@@ -128,11 +138,11 @@
                               MaxHeight="240" MinHeight="48" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Time], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding TimeText}" Width="*" MinWidth="110"/>
+                                                Binding="{Binding TimeText}" Width="*" MinWidth="110" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Col.Source], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Source}" Width="2*" MinWidth="220"/>
+                                                Binding="{Binding Source}" Width="2*" MinWidth="220" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Col.Target], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Target}" Width="2*" MinWidth="220"/>
+                                                Binding="{Binding Target}" Width="2*" MinWidth="220" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTemplateColumn Header="{Binding [Slim.Revert], Source={x:Static services:Locator.L10n}}"
                                                     Width="*" MinWidth="110">
                                 <DataGridTemplateColumn.CellTemplate>

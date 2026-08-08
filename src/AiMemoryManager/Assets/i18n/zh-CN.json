@@ -54,6 +54,7 @@
   "Leak.ThresholdMb": "增长阈值(MB)",
   "Leak.WindowMin": "观察窗口(分钟)",
   "Llm.Profiles": "配置档案",
+  "Llm.Presets": "常见大模型配置", "Llm.ApplyPreset": "应用预设", "Llm.PresetHint": "选择服务后会自动填入 Base URL 和模型，API Key 仍需自行填写。",
   "Llm.Add": "新增档案", "Llm.Edit": "编辑", "Llm.Delete": "删除", "Llm.SetActive": "设为当前",
   "Llm.Active": "当前使用",
   "Llm.Name": "名称", "Llm.BaseUrl": "Base URL", "Llm.ApiKey": "API Key", "Llm.Model": "模型",

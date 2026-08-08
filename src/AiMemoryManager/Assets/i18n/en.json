@@ -54,6 +54,7 @@
   "Leak.ThresholdMb": "Growth threshold (MB)",
   "Leak.WindowMin": "Observation window (minutes)",
   "Llm.Profiles": "Profiles",
+  "Llm.Presets": "Common LLM presets", "Llm.ApplyPreset": "Apply preset", "Llm.PresetHint": "The preset fills Base URL and model; enter the API key yourself.",
   "Llm.Add": "Add Profile", "Llm.Edit": "Edit", "Llm.Delete": "Delete", "Llm.SetActive": "Set Active",
   "Llm.Active": "Active",
   "Llm.Name": "Name", "Llm.BaseUrl": "Base URL", "Llm.ApiKey": "API Key", "Llm.Model": "Model",
