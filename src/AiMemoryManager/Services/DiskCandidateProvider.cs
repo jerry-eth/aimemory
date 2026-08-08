@@ -28,21 +28,33 @@ public class DiskCandidateProvider
         // %USERPROFILE% 一级目录(Downloads/Documents/Desktop/Pictures/Videos/Music/AppData 等),
         // 只列存在者,大小由 DiskScanService 统一测量,UI 量完按大小排序展示 Top15
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        // 惰性枚举:异常发生在 MoveNext,因此用 IgnoreInaccessible + try 包住整个迭代
         IEnumerable<string> firstLevel;
-        try { firstLevel = Directory.EnumerateDirectories(profile); }
+        try { firstLevel = Directory.EnumerateDirectories(profile, "*", EnumOptions); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { firstLevel = Enumerable.Empty<string>(); }
-        foreach (var d in firstLevel)
+        try
         {
-            try
+            foreach (var d in firstLevel)
             {
-                if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;   // 跳过 junction(如 "Application Data")
+                try
+                {
+                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;   // 跳过 junction(如 "Application Data")
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { continue; }
+                Add(list, d, DiskCategory.UserFolder);
             }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { continue; }
-            Add(list, d, DiskCategory.UserFolder);
         }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { /* 枚举中途失败,返回已收集项 */ }
 
         return list;
     }
+
+    private static readonly EnumerationOptions EnumOptions = new()
+    {
+        IgnoreInaccessible = true,
+        AttributesToSkip = 0,
+        RecurseSubdirectories = false,
+    };
 
     private static void AddIfExists(List<DiskCandidate> list, string path, DiskCategory category)
     {

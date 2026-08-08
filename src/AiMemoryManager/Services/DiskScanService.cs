@@ -19,12 +19,34 @@ public class DiskScanService
         foreach (var c in candidates)
         {
             ct.ThrowIfCancellationRequested();
-            list.Add(await MeasureAsync(c.Path, c.Category, ct));
+            try
+            {
+                list.Add(await MeasureAsync(c.Path, c.Category, ct));
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+            {
+                // 单个候选失败不致命:跳过,继续测量其余候选
+            }
         }
         return list;
     }
 
-    private static FolderSizeInfo Measure(string path, DiskCategory category, CancellationToken ct)
+    private static readonly EnumerationOptions ScanOptions = new()
+    {
+        IgnoreInaccessible = true,
+        AttributesToSkip = 0,   // 不按属性过滤,保持与原先无选项枚举一致的口径
+        RecurseSubdirectories = false,
+    };
+
+    /// <summary>枚举钩子:可重写以模拟枚举期异常(惰性枚举的异常发生在 MoveNext)。</summary>
+    protected virtual IEnumerable<string> EnumerateFiles(string dir)
+        => Directory.EnumerateFiles(dir, "*", ScanOptions);
+
+    /// <summary>枚举钩子:可重写以模拟枚举期异常(惰性枚举的异常发生在 MoveNext)。</summary>
+    protected virtual IEnumerable<string> EnumerateDirectories(string dir)
+        => Directory.EnumerateDirectories(dir, "*", ScanOptions);
+
+    private FolderSizeInfo Measure(string path, DiskCategory category, CancellationToken ct)
     {
         long size = 0;
         int count = 0;
@@ -37,34 +59,44 @@ public class DiskScanService
             ct.ThrowIfCancellationRequested();
             var dir = stack.Pop();
 
+            // 惰性枚举:IgnoreInaccessible 跳过无权限项;try 包住整个 foreach,
+            // 因为异常实际发生在 MoveNext(如扫描中途目录被删),仅包住调用点无效。
             IEnumerable<string> files;
-            try { files = Directory.EnumerateFiles(dir); }
+            try { files = EnumerateFiles(dir); }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { continue; }
 
-            foreach (var f in files)
+            try
             {
-                try
+                foreach (var f in files)
                 {
-                    size += new FileInfo(f).Length;
-                    count++;
+                    try
+                    {
+                        size += new FileInfo(f).Length;
+                        count++;
+                    }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 跳过单文件 */ }
                 }
-                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 跳过单文件 */ }
             }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 枚举中途失败,继续子目录 */ }
 
             IEnumerable<string> subDirs;
-            try { subDirs = Directory.EnumerateDirectories(dir); }
+            try { subDirs = EnumerateDirectories(dir); }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { continue; }
 
-            foreach (var d in subDirs)
+            try
             {
-                try
+                foreach (var d in subDirs)
                 {
-                    // 跳过符号链接/联接点,避免循环与重复计量
-                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
-                    stack.Push(d);
+                    try
+                    {
+                        // 跳过符号链接/联接点,避免循环与重复计量
+                        if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
+                        stack.Push(d);
+                    }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 跳过 */ }
                 }
-                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 跳过 */ }
             }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 枚举中途失败,继续栈中剩余目录 */ }
         }
         return new FolderSizeInfo(path, category, size, count);
     }
