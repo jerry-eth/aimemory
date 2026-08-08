@@ -37,9 +37,13 @@ public partial class MainWindow : FluentWindow
 
         // 泄漏告警(App 转发,线程不定)→ 切回 UI 线程弹 Windows 通知
         App.LeakAlerted += alert => Dispatcher.BeginInvoke(() =>
+        {
+            // FR-8.4 通知总闸:关闭后应用内不再弹任何通知
+            if (!Locator.Settings.Current.NotificationsEnabled) return;
             Tray.ShowNotification(Locator.L10n["App.Title"],
                 string.Format(Locator.L10n["Leak.Alert"], alert.ProcessName, alert.GrowthBytes / (1 << 20)),
-                H.NotifyIcon.Core.NotificationIcon.Warning));
+                H.NotifyIcon.Core.NotificationIcon.Warning);
+        });
     }
 
     private void UpdateTray(double percent)
@@ -65,14 +69,16 @@ public partial class MainWindow : FluentWindow
         try
         {
             var r = await Locator.Clean.RunL1Async(CleanTrigger.Tray);
-            Tray.ShowNotification(Locator.L10n["App.Title"],
-                string.Format(Locator.L10n["Clean.Done"], r.FreedBytes / (1 << 20)),
-                H.NotifyIcon.Core.NotificationIcon.Info);
+            if (Locator.Settings.Current.NotificationsEnabled)   // FR-8.4 通知总闸
+                Tray.ShowNotification(Locator.L10n["App.Title"],
+                    string.Format(Locator.L10n["Clean.Done"], r.FreedBytes / (1 << 20)),
+                    H.NotifyIcon.Core.NotificationIcon.Info);
         }
         catch (Exception ex)
         {
-            Tray.ShowNotification(Locator.L10n["App.Title"], ex.Message,
-                H.NotifyIcon.Core.NotificationIcon.Error);
+            if (Locator.Settings.Current.NotificationsEnabled)   // FR-8.4 通知总闸
+                Tray.ShowNotification(Locator.L10n["App.Title"], ex.Message,
+                    H.NotifyIcon.Core.NotificationIcon.Error);
         }
     }
 

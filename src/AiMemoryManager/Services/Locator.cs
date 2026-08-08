@@ -1,4 +1,5 @@
 using System.IO;
+using AiMemoryManager.Models;
 using AiMemoryManager.Native;
 
 namespace AiMemoryManager.Services;
@@ -25,6 +26,11 @@ public static class Locator
     public static AnalysisService Analysis { get; private set; } = null!;
     public static AnalysisScheduler Scheduler { get; private set; } = null!;
     public static LeakDetectionService LeakDetection { get; private set; } = null!;
+    public static CleanHistoryService History { get; private set; } = null!;
+    public static KillLogService KillLog { get; private set; } = null!;
+    public static UnsavedStateDetector Unsaved { get; private set; } = null!;
+    public static ProcessTerminateService Terminator { get; private set; } = null!;
+    public static StartupService Startup { get; private set; } = null!;
 
     public static void Init()
     {
@@ -54,5 +60,19 @@ public static class Locator
         Scheduler = new AnalysisScheduler(Settings, Native,
             (t, ct) => Analysis.AnalyzeAsync(t, false, ct), TokenStats, () => DateTimeOffset.Now);
         LeakDetection = new LeakDetectionService(Settings, () => DateTimeOffset.Now);
+
+        // M3 接线顺序:History/KillLog/Unsaved → Terminator → Startup
+        History = new CleanHistoryService(CleanHistoryService.DefaultPath());
+        KillLog = new KillLogService(KillLogService.DefaultPath());
+        Unsaved = new UnsavedStateDetector(Native);
+        Terminator = new ProcessTerminateService(Native, Whitelist, Guard, Unsaved, KillLog);
+        Startup = new StartupService(Settings);
+        // 启动时按设置同步一次注册表(设置开但键被外部删除 → 补写;设置关但键残留 → 清掉)
+        if (Settings.Current.AutoStartEnabled != Startup.IsEnabled)
+            Startup.SetEnabled(Settings.Current.AutoStartEnabled);
+
+        // 只有 CleanService 在 Locator 记录清理历史;Terminator 的历史由调用方 VM 记(进程页 Manual/分析页 Analysis),避免双记
+        Clean.CleanCompleted += (_, r) => History.Record(
+            new CleanHistoryEntry(r.Time, r.Level, r.FreedBytes, r.ProcessCount, r.Trigger));
     }
 }

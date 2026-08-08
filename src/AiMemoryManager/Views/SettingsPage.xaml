@@ -39,6 +39,38 @@
                     <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Animations}"/>
                 </Grid>
             </ui:Card>
+            <!-- 开机自启卡 -->
+            <ui:Card Margin="0,4">
+                <Grid Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding [Settings.AutoStart], Source={x:Static services:Locator.L10n}}"/>
+                        <TextBlock Text="{Binding [Settings.AutoStartDesc], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="12" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding AutoStartEnabled}"/>
+                </Grid>
+            </ui:Card>
+            <!-- 通知卡 -->
+            <ui:Card Margin="0,4">
+                <Grid Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding [Settings.Notifications], Source={x:Static services:Locator.L10n}}"/>
+                        <TextBlock Text="{Binding [Settings.NotificationsDesc], Source={x:Static services:Locator.L10n}}"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   FontSize="12" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding NotificationsEnabled}"/>
+                </Grid>
+            </ui:Card>
             <!-- 关于卡 -->
             <ui:Card Margin="0,4">
                 <StackPanel Margin="16">

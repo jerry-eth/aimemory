@@ -21,6 +21,8 @@
   "Whitelist.FileFilter": "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*",
   "Settings.Language": "语言", "Settings.LangAuto": "跟随系统",
   "Settings.Animations": "界面动效", "Settings.About": "关于",
+  "Settings.AutoStart": "开机自启", "Settings.AutoStartDesc": "登录 Windows 时自动启动(最小化到托盘)",
+  "Settings.Notifications": "通知", "Settings.NotificationsDesc": "清理结果、泄漏告警等应用内通知总开关",
   "Tray.Clean": "一键清理", "Tray.Open": "打开主界面", "Tray.Exit": "退出",
   "Tray.ToolTip": "内存占用 {0}%",
   "Clean.Done": "清理完成,释放 {0} MB",

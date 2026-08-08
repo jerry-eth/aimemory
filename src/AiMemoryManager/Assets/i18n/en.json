@@ -21,6 +21,8 @@
   "Whitelist.FileFilter": "Text files (*.txt)|*.txt|All files (*.*)|*.*",
   "Settings.Language": "Language", "Settings.LangAuto": "Follow System",
   "Settings.Animations": "UI Animations", "Settings.About": "About",
+  "Settings.AutoStart": "Launch at Startup", "Settings.AutoStartDesc": "Start automatically when you sign in to Windows (minimized to tray)",
+  "Settings.Notifications": "Notifications", "Settings.NotificationsDesc": "Master switch for in-app notifications (clean results, leak alerts)",
   "Tray.Clean": "Clean Now", "Tray.Open": "Open Main Window", "Tray.Exit": "Exit",
   "Tray.ToolTip": "Memory used {0}%",
   "Clean.Done": "Clean complete, freed {0} MB",

@@ -49,6 +49,31 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>FR-8.3 开机自启:setter 写注册表 Run 键并保存设置,getter 回读注册表真实状态。</summary>
+    public bool AutoStartEnabled
+    {
+        get => Locator.Startup.IsEnabled;
+        set
+        {
+            if (Locator.Startup.IsEnabled == value) return;
+            Locator.Startup.SetEnabled(value);   // 内部已写设置并 Save
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>FR-8.4 应用内通知总闸,即时存储。</summary>
+    public bool NotificationsEnabled
+    {
+        get => Locator.Settings.Current.NotificationsEnabled;
+        set
+        {
+            if (Locator.Settings.Current.NotificationsEnabled == value) return;
+            Locator.Settings.Current.NotificationsEnabled = value;
+            Locator.Settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
     public string VersionText
     {
         get
