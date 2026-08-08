@@ -15,6 +15,16 @@
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
             <Setter Property="Padding" Value="8,4"/>
         </Style>
+        <Style x:Key="StatsCellText" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,0"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
         <Style x:Key="StatsGrid" TargetType="DataGrid">
             <Setter Property="AutoGenerateColumns" Value="False"/>
             <Setter Property="IsReadOnly" Value="True"/>
@@ -33,7 +43,7 @@
         </Style>
     </Page.Resources>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
-        <StackPanel Margin="24">
+        <StackPanel Margin="24" MinWidth="980">
             <ui:Button Content="{Binding [Processes.Refresh], Source={x:Static services:Locator.L10n}}"
                        Command="{Binding RefreshCommand}" HorizontalAlignment="Left" Margin="0,0,0,8"/>
             <!-- 三聚合卡:今日/本周/本月 -->
@@ -82,15 +92,15 @@
                     <DataGrid Style="{StaticResource StatsGrid}" ItemsSource="{Binding ByProfile}" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Profile], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Profile}" Width="2*"/>
+                                                Binding="{Binding Profile}" Width="2*" MinWidth="220" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Input], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding InputText}" Width="*"/>
+                                                Binding="{Binding InputText}" Width="*" MinWidth="110" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Output], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding OutputText}" Width="*"/>
+                                                Binding="{Binding OutputText}" Width="*" MinWidth="110" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Calls], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding CallsText}" Width="*"/>
+                                                Binding="{Binding CallsText}" Width="*" MinWidth="110" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Cost], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding CostText}" Width="*"/>
+                                                Binding="{Binding CostText}" Width="*" MinWidth="120" ElementStyle="{StaticResource StatsCellText}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>
@@ -104,17 +114,17 @@
                               MaxHeight="400" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Time], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding TimeText}" Width="*"/>
+                                                Binding="{Binding TimeText}" Width="*" MinWidth="130" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Profile], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Profile}" Width="*"/>
+                                                Binding="{Binding Profile}" Width="*" MinWidth="180" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Model], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Model}" Width="*"/>
+                                                Binding="{Binding Model}" Width="*" MinWidth="180" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Input], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding InputText}" Width="*"/>
+                                                Binding="{Binding InputText}" Width="*" MinWidth="110" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Output], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding OutputText}" Width="*"/>
+                                                Binding="{Binding OutputText}" Width="*" MinWidth="110" ElementStyle="{StaticResource StatsCellText}"/>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Trigger], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding TriggerText}" Width="*"/>
+                                                Binding="{Binding TriggerText}" Width="*" MinWidth="110" ElementStyle="{StaticResource StatsCellText}"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </StackPanel>
