@@ -38,6 +38,7 @@ public class NativeMemoryApi : INativeMemoryApi
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr hObject);
 
+    [return: MarshalAs(UnmanagedType.Bool)]
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
     [DllImport("user32.dll")]
