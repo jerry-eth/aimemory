@@ -38,6 +38,8 @@
   "Analysis.Col.Process": "进程", "Analysis.Col.Action": "建议", "Analysis.Col.Reason": "理由", "Analysis.Col.Risk": "风险",
   "Analysis.Action.compress": "可压缩", "Analysis.Action.terminate": "建议关闭", "Analysis.Action.keep": "保留",
   "Analysis.TerminateM3": "结束进程功能将在下一版本提供",
+  "Analysis.TerminateNow": "结束进程",
+  "Analysis.NoneKillable": "该进程受保护,不可结束",
   "Analysis.CompressNow": "立即压缩",
   "Analysis.Compressed": "已释放 {0} MB",
   "Analysis.Usage": "本次消耗 {0} + {1} Token",

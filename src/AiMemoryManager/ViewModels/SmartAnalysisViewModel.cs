@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using AiMemoryManager.Models;
 using AiMemoryManager.Services;
+using AiMemoryManager.Views;
 
 namespace AiMemoryManager.ViewModels;
 
@@ -14,7 +15,9 @@ public partial class SuggestionItemViewModel : ObservableObject
     public string ActionText => Locator.L10n["Analysis.Action." + Suggestion.Action];
     public string Reason => Suggestion.Reason;
     public string Risk => Suggestion.Risk;
-    public bool CanExecute => Suggestion.Action == "compress";
+    /// <summary>compress 与 terminate 建议均可一键执行(terminate 走 L3 确认流)。</summary>
+    public bool CanExecute => Suggestion.Action is "compress" or "terminate";
+    public bool IsCompress => Suggestion.Action == "compress";
     public bool IsTerminate => Suggestion.Action == "terminate";
 }
 
@@ -114,6 +117,57 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             StatusText = string.Format(Locator.L10n["Dashboard.L1Failed"], ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// terminate 建议一键执行:与进程页 L3 同一强制确认流(FilterCandidates → 确认对话框 → TerminateAsync)。
+    /// 同名多实例:按进程名从全新快照解析 pid,所有匹配实例一起进清单;历史以 CleanTrigger.Analysis 记一次。
+    /// </summary>
+    [RelayCommand]
+    private async Task TerminateAsync(SuggestionItemViewModel? item)
+    {
+        if (item is null) return;
+        // async 命令:全程 try/catch,失败只落状态文本
+        try
+        {
+            var snaps = Locator.Native.GetProcessSnapshots();
+            var sameName = snaps
+                .Where(p => string.Equals(p.Name, item.ProcessName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var killable = Locator.Terminator
+                .FilterCandidates(sameName.Select(p => p.Pid).ToList()).ToHashSet();
+            var targets = sameName.Where(p => killable.Contains(p.Pid)).ToList();
+            // 建议已被 AnalysisService 预过滤,但快照可能已变化/进程被加白,需重查
+            if (targets.Count == 0)
+            {
+                StatusText = Locator.L10n["Analysis.NoneKillable"];
+                return;
+            }
+
+            var rows = targets.Select(t => new TerminateConfirmItem(
+                t.Pid, t.Name, t.Path, t.WorkingSetBytes,
+                Locator.Unsaved.HasUnsavedSigns(t.Pid))).ToList();
+
+            // L3 默认必须用户确认:无静默终止路径
+            var dlg = new TerminateConfirmDialog(rows) { Owner = System.Windows.Application.Current.MainWindow };
+            if (dlg.ShowDialog() != true) return;
+
+            var r = await Locator.Terminator.TerminateAsync(dlg.SelectedPids);
+            int ok = r.Items.Count(i => i.Success);
+            int fail = r.Items.Count - ok;
+            // 成功终止后才记历史(Analysis 触发 L3 的唯一记录点)
+            if (ok > 0)
+                Locator.History.Record(new CleanHistoryEntry(
+                    DateTimeOffset.Now, CleanLevel.L3, r.FreedBytes, ok, CleanTrigger.Analysis));
+            StatusText = string.Format(Locator.L10n["L3.Result"], ok, r.FreedBytes / (1 << 20), fail);
+            // 该卡标记已处理:从建议列表移除
+            Suggestions.Remove(item);
+            HasSuggestions = Suggestions.Count > 0;
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
         }
     }
 

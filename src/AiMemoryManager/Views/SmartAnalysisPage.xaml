@@ -78,15 +78,17 @@
                                     <TextBlock Text="{Binding Reason}" TextWrapping="Wrap" Margin="0,4,0,0"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
-                                <!-- compress 建议:立即压缩(M2=全量 L1);terminate 建议:灰显 M3 说明 -->
+                                <!-- compress 建议:立即压缩(M2=全量 L1);terminate 建议:结束进程(L3 确认流) -->
                                 <ui:Button Grid.Column="1" VerticalAlignment="Center"
                                            Content="{Binding [Analysis.CompressNow], Source={x:Static services:Locator.L10n}}"
                                            Command="{Binding DataContext.CompressCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                            CommandParameter="{Binding}"
-                                           Visibility="{Binding CanExecute, Converter={StaticResource BoolToVis}}"/>
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center"
-                                           Text="{Binding [Analysis.TerminateM3], Source={x:Static services:Locator.L10n}}"
-                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Visibility="{Binding IsCompress, Converter={StaticResource BoolToVis}}"/>
+                                <ui:Button Grid.Column="1" VerticalAlignment="Center"
+                                           Content="{Binding [Analysis.TerminateNow], Source={x:Static services:Locator.L10n}}"
+                                           Appearance="Secondary"
+                                           Command="{Binding DataContext.TerminateCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                           CommandParameter="{Binding}"
                                            Visibility="{Binding IsTerminate, Converter={StaticResource BoolToVis}}"/>
                             </Grid>
                         </ui:Card>

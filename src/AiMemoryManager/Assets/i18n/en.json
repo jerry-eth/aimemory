@@ -38,6 +38,8 @@
   "Analysis.Col.Process": "Process", "Analysis.Col.Action": "Suggestion", "Analysis.Col.Reason": "Reason", "Analysis.Col.Risk": "Risk",
   "Analysis.Action.compress": "Compressible", "Analysis.Action.terminate": "Close suggested", "Analysis.Action.keep": "Keep",
   "Analysis.TerminateM3": "Process termination will be available in the next version",
+  "Analysis.TerminateNow": "End Process",
+  "Analysis.NoneKillable": "This process is protected and cannot be terminated",
   "Analysis.CompressNow": "Compress Now",
   "Analysis.Compressed": "Freed {0} MB",
   "Analysis.Usage": "Used {0} + {1} tokens this run",
