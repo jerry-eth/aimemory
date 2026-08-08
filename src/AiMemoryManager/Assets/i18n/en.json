@@ -91,7 +91,7 @@
   "Tokens.Input": "Input", "Tokens.Output": "Output", "Tokens.Calls": "Calls", "Tokens.Cost": "Est. Cost",
   "Tokens.ByProfile": "By Profile", "Tokens.Recent": "Recent Calls",
   "Tokens.Col.Time": "Time", "Tokens.Col.Profile": "Profile", "Tokens.Col.Model": "Model", "Tokens.Col.Trigger": "Trigger",
-  "Tokens.Trigger.Manual": "Manual", "Tokens.Trigger.Threshold": "Threshold", "Tokens.Trigger.Timer": "Timer", "Tokens.Trigger.Leak": "Leak",
+  "Tokens.Trigger.Manual": "Manual", "Tokens.Trigger.Threshold": "Threshold", "Tokens.Trigger.Timer": "Timer", "Tokens.Trigger.Leak": "Leak", "Tokens.Trigger.Conversation": "Conversation",
   "Tokens.BudgetHit": "Monthly budget reached; auto analysis paused",
   "L3.Terminate": "End Selected",
   "L3.ConfirmTitle": "Confirm Process Termination",
@@ -114,7 +114,7 @@
   "Dash.HistoryEmpty": "No clean history yet",
   "Dash.Level.L1": "Light Clean", "Dash.Level.L2": "Deep Clean", "Dash.Level.L3": "End Processes",
   "Dash.Trigger.Manual": "Manual", "Dash.Trigger.RuleThreshold": "Threshold Rule",
-  "Dash.Trigger.RuleTimer": "Timer Rule", "Dash.Trigger.Tray": "Tray", "Dash.Trigger.Analysis": "Smart Analysis",
+  "Dash.Trigger.RuleTimer": "Timer Rule", "Dash.Trigger.Tray": "Tray", "Dash.Trigger.Analysis": "Smart Analysis", "Dash.Trigger.Conversation": "Conversation",
   "Nav.CSlim": "Drive C Slimmer",
   "Slim.Scan": "Scan Usage", "Slim.Scanning": "Scanning...", "Slim.Size": "Size", "Slim.Category": "Category",
   "Slim.FileCount": "Files",
@@ -128,5 +128,11 @@
   "Slim.MigrateLog": "Migration Log", "Slim.MigrateLogEmpty": "No migration records", "Slim.Revert": "Revert", "Slim.Reverted": "Reverted", "Slim.RevertDone": "Reverted {0}",
   "Slim.RevertFailed": "Revert failed",
   "Slim.Col.Source": "Source", "Slim.Col.Target": "Target",
-  "Slim.Protected": "System-protected path; operation not allowed", "Slim.Empty": "No data yet. Run a scan first."
+  "Slim.Protected": "System-protected path; operation not allowed", "Slim.Empty": "No data yet. Run a scan first.",
+  "Blacklist.Title": "Blacklist Auto-Termination", "Blacklist.Desc": "When enabled, matching processes are ended after they start; system-critical and no-kill processes are always protected.",
+  "Blacklist.Add": "Add to Blacklist", "Blacklist.Empty": "No blacklisted processes", "Blacklist.Added": "Added to blacklist", "Blacklist.Removed": "Removed from blacklist",
+  "Blacklist.EnableConfirm": "Matching processes will be ended automatically after launch. This feature may terminate the wrong process. Enable it?",
+  "Blacklist.Enabled": "Blacklist auto-termination enabled", "Blacklist.Disabled": "Blacklist auto-termination disabled",
+  "Blacklist.NotifyTerminated": "Blacklist automatically ended {0}: {1}", "Blacklist.NotifySkipped": "Blacklist process {0} was skipped: {1}",
+  "Analysis.ReportTitle": "Analysis Report", "Analysis.ReportSummary": "Summary", "Analysis.ReportMemory": "Memory Usage", "Analysis.ReportProcesses": "Processes", "Analysis.ReportSuggestions": "Suggestions", "Analysis.Chat": "Continue Chat", "Analysis.ChatTitle": "Smart Analysis Chat", "Analysis.ChatPlaceholder": "Ask about the report or describe a cleanup operation…", "Analysis.ChatSend": "Send", "Analysis.ChatExecute": "Execute Plan", "Analysis.ChatNoPlan": "This response is informational only; no operation will run.", "Analysis.ChatPlan": "Pending Execution Plan", "Analysis.ChatConfirm": "This operation changes system state and runs only after confirmation.", "Analysis.ChatExecuted": "Executed: freed {0} MB, processed {1}, failed {2}", "Analysis.ChatPlanNone": "No executable plan"
 }

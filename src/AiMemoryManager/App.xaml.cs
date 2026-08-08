@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Threading;
 using AiMemoryManager.Models;
 using AiMemoryManager.Services;
@@ -15,6 +15,7 @@ public partial class App : Application
 
     /// <summary>泄漏告警转发:事件在 UI 线程触发(_leakTimer.Tick 内 Sample 始终由 Dispatcher 封送回 UI 线程),MainWindow 可直接弹通知。</summary>
     public static event Action<LeakAlert>? LeakAlerted;
+    public static event Action<BlacklistActionResult>? BlacklistActioned;
 
     private Mutex? _mutex;
     private DispatcherTimer? _ruleTimer;
@@ -29,6 +30,9 @@ public partial class App : Application
         SessionEnding += (_, _) => IsSessionEnding = true; // 关机/注销:允许窗口真正关闭
 
         Locator.Init();
+        Locator.ProcessStartMonitor.Actioned += (_, result) => BlacklistActioned?.Invoke(result);
+        Locator.ProcessStartMonitor.MonitorError += (_, ex) => System.Diagnostics.Debug.WriteLine($"[Blacklist] Monitor failed: {ex.Message}");
+        Locator.ProcessStartMonitor.SetEnabled(Locator.Settings.Current.BlacklistAutoTerminateEnabled);
         Locator.Monitor.Start();
 
         _ruleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(RuleEngine.TickIntervalSeconds) };
@@ -94,6 +98,7 @@ public partial class App : Application
         _leakTimer?.Stop();
         if (Locator.Hotkey is not null) Locator.Hotkey.Dispose();   // FR-8.5:退出前注销全局热键
         if (Locator.Monitor is not null) Locator.Monitor.Dispose();
+        if (Locator.ProcessStartMonitor is not null) Locator.ProcessStartMonitor.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);
     }

@@ -22,11 +22,30 @@
                                Appearance="Secondary" Command="{Binding ForceRefreshCommand}"
                                Width="120" Height="40" Margin="8,0,0,0"
                                Visibility="{Binding HasSuggestions, Converter={StaticResource BoolToVis}}"/>
+                    <ui:Button Content="{Binding [Analysis.Chat], Source={x:Static services:Locator.L10n}}"
+                               Appearance="Secondary" Command="{Binding OpenChatCommand}"
+                               Width="120" Height="40" Margin="8,0,0,0"/>
                     <StackPanel VerticalAlignment="Center" Margin="16,0,0,0">
                         <TextBlock Text="{Binding StatusText}"/>
                         <TextBlock Text="{Binding UsageText}"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
+                </StackPanel>
+            </ui:Card>
+<!-- 分析报告：结果在共享 VM 中保留，切换菜单后仍可查看 -->
+            <ui:Card Margin="0,4" Visibility="{Binding HasReport, Converter={StaticResource BoolToVis}}">
+                <StackPanel Margin="16">
+                    <TextBlock Text="{Binding [Analysis.ReportTitle], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold" FontSize="16"/>
+                    <TextBlock Text="{Binding Report.Summary}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    <WrapPanel Margin="0,8,0,0">
+                        <TextBlock Text="{Binding [Analysis.ReportMemory], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                        <TextBlock Text="："/><TextBlock Text="{Binding Report.MemoryText}" Margin="0,0,20,0"/>
+                        <TextBlock Text="{Binding [Analysis.ReportProcesses], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                        <TextBlock Text="："/><TextBlock Text="{Binding Report.ProcessCount}" Margin="0,0,20,0"/>
+                        <TextBlock Text="{Binding [Analysis.ReportSuggestions], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
+                        <TextBlock Text="："/><TextBlock Text="{Binding Report.SuggestionCount}"/>
+                    </WrapPanel>
+                    <ItemsControl ItemsSource="{Binding Report.Recommendations}" Margin="0,8,0,0"/>
                 </StackPanel>
             </ui:Card>
             <!-- 无档案引导卡 -->

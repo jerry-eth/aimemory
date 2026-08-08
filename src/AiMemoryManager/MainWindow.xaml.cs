@@ -39,6 +39,15 @@ public partial class MainWindow : FluentWindow
             Dispatcher.BeginInvoke(() => UpdateTray(info.UsedPercent));
 
         // 泄漏告警(App 转发,线程不定)→ 切回 UI 线程弹 Windows 通知
+        App.BlacklistActioned += result => Dispatcher.BeginInvoke(() =>
+        {
+            if (!Locator.Settings.Current.NotificationsEnabled) return;
+            var key = result.Status == "terminated" ? "Blacklist.NotifyTerminated" : "Blacklist.NotifySkipped";
+            Tray.ShowNotification(Locator.L10n["App.Title"],
+                string.Format(Locator.L10n[key], result.ProcessName, result.Reason),
+                result.Status == "terminated" ? H.NotifyIcon.Core.NotificationIcon.Warning : H.NotifyIcon.Core.NotificationIcon.Info);
+        });
+
         App.LeakAlerted += alert => Dispatcher.BeginInvoke(() =>
         {
             // FR-8.4 通知总闸:关闭后应用内不再弹任何通知

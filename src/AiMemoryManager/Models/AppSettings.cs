@@ -13,6 +13,8 @@ public class AppSettings
     public bool OnlyWhenNotFullscreen { get; set; } = true;
     public bool AnimationsEnabled { get; set; } = true;
     public List<string> ExcludedProcesses { get; set; } = new();
+    public List<string> BlacklistProcesses { get; set; } = new();
+    public bool BlacklistAutoTerminateEnabled { get; set; } = false;
 
     // M2:LLM 集成与泄漏检测
     public string? ActiveProfileId { get; set; }

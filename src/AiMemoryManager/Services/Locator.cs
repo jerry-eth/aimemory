@@ -12,6 +12,7 @@ public static class Locator
     public static INativeMemoryApi Native { get; private set; } = new NativeMemoryApi();
     public static SettingsService Settings { get; private set; } = null!;
     public static WhitelistService Whitelist { get; private set; } = null!;
+    public static BlacklistService Blacklist { get; private set; } = null!;
     public static ForegroundGuard Guard { get; private set; } = null!;
     public static IL2Executor L2 { get; private set; } = null!;
     public static CleanService Clean { get; private set; } = null!;
@@ -24,12 +25,15 @@ public static class Locator
     public static ILlmClient LlmClient { get; private set; } = null!;
     public static AnalysisCacheService AnalysisCache { get; private set; } = null!;
     public static AnalysisService Analysis { get; private set; } = null!;
+    public static AnalysisChatService AnalysisChat { get; private set; } = null!;
+    public static AnalysisActionPlanService AnalysisActions { get; private set; } = null!;
     public static AnalysisScheduler Scheduler { get; private set; } = null!;
     public static LeakDetectionService LeakDetection { get; private set; } = null!;
     public static CleanHistoryService History { get; private set; } = null!;
     public static KillLogService KillLog { get; private set; } = null!;
     public static UnsavedStateDetector Unsaved { get; private set; } = null!;
     public static ProcessTerminateService Terminator { get; private set; } = null!;
+    public static ProcessStartMonitorService ProcessStartMonitor { get; private set; } = null!;
     public static StartupService Startup { get; private set; } = null!;
     public static HotkeyService Hotkey { get; private set; } = null!;
     public static DiskScanService DiskScan { get; private set; } = null!;
@@ -43,6 +47,7 @@ public static class Locator
         Settings = new SettingsService(SettingsService.DefaultPath());
         Settings.Load();
         Whitelist = new WhitelistService(Settings);
+        Blacklist = new BlacklistService(Settings);
         Guard = new ForegroundGuard(Native, () => Environment.ProcessId);
         var helperPath = Path.Combine(AppContext.BaseDirectory, "AiMemoryManager.ElevatedHelper.exe");
         L2 = new ElevatedL2Service(helperPath);
@@ -62,6 +67,8 @@ public static class Locator
         AnalysisCache = new AnalysisCacheService(AnalysisCacheService.DefaultPath(), () => DateTimeOffset.Now);
         Analysis = new AnalysisService(Native, Whitelist, Guard, Profiles, Prompts, LlmClient,
             AnalysisCache, TokenStats, Settings, L10n);
+        AnalysisChat = new AnalysisChatService(LlmClient, Profiles, Native, Whitelist, Guard, TokenStats, L10n);
+        AnalysisActions = new AnalysisActionPlanService();
         // 自动触发走默认参数(forceRefresh=false),显式 lambda 匹配委托签名
         Scheduler = new AnalysisScheduler(Settings, Native,
             (t, ct) => Analysis.AnalyzeAsync(t, false, ct), TokenStats, () => DateTimeOffset.Now);
@@ -72,6 +79,7 @@ public static class Locator
         KillLog = new KillLogService(KillLogService.DefaultPath());
         Unsaved = new UnsavedStateDetector(Native);
         Terminator = new ProcessTerminateService(Native, Whitelist, Guard, Unsaved, KillLog);
+        ProcessStartMonitor = new ProcessStartMonitorService(Blacklist, Terminator, Native, Whitelist);
         Startup = new StartupService(Settings);
         // 启动时按设置同步一次注册表(设置开但键被外部删除 → 补写;设置关但键残留 → 清掉)
         if (Settings.Current.AutoStartEnabled != Startup.IsEnabled)

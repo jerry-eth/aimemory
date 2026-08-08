@@ -23,6 +23,7 @@ public class ProcessTerminateService
         return pids.Where(pid =>
         {
             if (!names.TryGetValue(pid, out var name)) return false;
+            if (pid == Environment.ProcessId) return false;
             if (_whitelist.IsSystemCritical(name)) return false;
             if (_whitelist.IsExcluded(name)) return false;
             if (_whitelist.IsNoKill(name)) return false;
@@ -31,21 +32,48 @@ public class ProcessTerminateService
         }).ToList();
     }
 
+    /// <summary>黑名单/对话计划使用的自动路径：白名单只代表清理排除，不覆盖用户明确的黑名单动作。</summary>
+    public IReadOnlyList<int> FilterAutomaticCandidates(IReadOnlyCollection<int> pids)
+    {
+        var names = _native.GetProcessSnapshots().ToDictionary(p => p.Pid, p => p.Name);
+        return pids.Where(pid =>
+        {
+            if (!names.TryGetValue(pid, out var name)) return false;
+            if (pid == Environment.ProcessId) return false;
+            if (_whitelist.IsSystemCritical(name)) return false;
+            if (_whitelist.IsNoKill(name)) return false;
+            if (_guard.IsProtected(pid)) return false;
+            return true;
+        }).ToList();
+    }
+
     public Task<TerminateResult> TerminateAsync(IReadOnlyCollection<int> pids)
+        => TerminateCoreAsync(pids, FilterCandidates, "Manual");
+
+    public Task<TerminateResult> TerminateAutomaticAsync(IReadOnlyCollection<int> pids, string source = "Blacklist")
+        => TerminateCoreAsync(pids, FilterAutomaticCandidates, source);
+
+    private Task<TerminateResult> TerminateCoreAsync(
+        IReadOnlyCollection<int> pids,
+        Func<IReadOnlyCollection<int>, IReadOnlyList<int>> filter,
+        string source)
         => Task.Run(() =>
         {
             var snaps = _native.GetProcessSnapshots().ToDictionary(p => p.Pid);
             var items = new List<TerminateItemResult>();
             long freed = 0;
-            foreach (var pid in FilterCandidates(pids))
+            foreach (var pid in filter(pids))
             {
-                var snap = snaps[pid];
+                if (!snaps.TryGetValue(pid, out var snap)) continue;
                 bool ok = _native.TryTerminateProcess(pid, out int err);
                 items.Add(new TerminateItemResult(pid, snap.Name, ok, ok ? 0 : err));
                 if (ok)
                 {
                     freed += snap.WorkingSetBytes;
-                    _killLog.Record(new KillRecord(DateTimeOffset.Now, pid, snap.Name, snap.Path, null));
+                    _killLog.Record(new KillRecord(DateTimeOffset.Now, pid, snap.Name, snap.Path, null)
+                    {
+                        Source = source
+                    });
                 }
             }
             var result = new TerminateResult(freed, items);

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -49,6 +50,17 @@ public partial class WhitelistViewModel : ObservableObject
     // FR-7.2 防误杀名单(第二列表):名单内进程永远不会被"结束进程"终止
     public ObservableCollection<string> NoKillItems { get; } = new();
 
+    // 黑名单自动终止
+    public ObservableCollection<string> BlacklistItems { get; } = new();
+    [ObservableProperty] private bool _blacklistHasItems;
+    [ObservableProperty] private bool _blacklistIsEmpty = true;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddBlacklistCommand))]
+    private string _newBlacklistName = "";
+
+    [ObservableProperty]
+    private bool _blacklistAutoTerminateEnabled;
     [ObservableProperty] private bool _noKillHasItems;
     [ObservableProperty] private bool _noKillIsEmpty = true;
 
@@ -60,6 +72,8 @@ public partial class WhitelistViewModel : ObservableObject
     {
         RefreshList();
         RefreshNoKillList();
+        RefreshBlacklistList();
+        _blacklistAutoTerminateEnabled = Locator.Settings.Current.BlacklistAutoTerminateEnabled;
     }
 
     private void RefreshList()
@@ -71,6 +85,14 @@ public partial class WhitelistViewModel : ObservableObject
         IsEmpty = !HasItems;
     }
 
+    private void RefreshBlacklistList()
+    {
+        BlacklistItems.Clear();
+        foreach (var n in Locator.Blacklist.Items.OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+            BlacklistItems.Add(n);
+        BlacklistHasItems = BlacklistItems.Count > 0;
+        BlacklistIsEmpty = !BlacklistHasItems;
+    }
     private void RefreshNoKillList()
     {
         NoKillItems.Clear();
@@ -174,12 +196,62 @@ public partial class WhitelistViewModel : ObservableObject
             AddSelectedAdviceCommand.NotifyCanExecuteChanged();
     }
 
+    [RelayCommand(CanExecute = nameof(CanAddBlacklist))]
+    private void AddBlacklist()
+    {
+        if (Locator.Blacklist.TryAdd(NewBlacklistName, out var reason))
+        {
+            NewBlacklistName = "";
+            StatusText = Locator.L10n["Blacklist.Added"];
+            RefreshBlacklistList();
+        }
+        else
+        {
+            StatusText = reason;
+        }
+    }
+
+    private bool CanAddBlacklist() => !string.IsNullOrWhiteSpace(NewBlacklistName);
+
+    [RelayCommand]
+    private void RemoveBlacklist(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return;
+        Locator.Blacklist.Remove(name);
+        RefreshBlacklistList();
+        StatusText = Locator.L10n["Blacklist.Removed"];
+    }
+
+    partial void OnBlacklistAutoTerminateEnabledChanged(bool value)
+    {
+        if (value)
+        {
+            var result = MessageBox.Show(
+                Application.Current.MainWindow,
+                Locator.L10n["Blacklist.EnableConfirm"],
+                Locator.L10n["Blacklist.Title"],
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes)
+            {
+                _blacklistAutoTerminateEnabled = false;
+                OnPropertyChanged(nameof(BlacklistAutoTerminateEnabled));
+                return;
+            }
+        }
+
+        Locator.Settings.Current.BlacklistAutoTerminateEnabled = value;
+        Locator.Settings.Save();
+        Locator.ProcessStartMonitor.SetEnabled(value);
+        StatusText = value ? Locator.L10n["Blacklist.Enabled"] : Locator.L10n["Blacklist.Disabled"];
+    }
     [RelayCommand(CanExecute = nameof(CanAddNoKill))]
     private void AddNoKill()
     {
         Locator.Whitelist.AddNoKill(NewNoKillName);
         NewNoKillName = "";
         RefreshNoKillList();
+        RefreshBlacklistList();
     }
 
     private bool CanAddNoKill() => !string.IsNullOrWhiteSpace(NewNoKillName);
@@ -190,6 +262,7 @@ public partial class WhitelistViewModel : ObservableObject
         if (string.IsNullOrEmpty(name)) return;
         Locator.Whitelist.RemoveNoKill(name);
         RefreshNoKillList();
+        RefreshBlacklistList();
     }
 
     [RelayCommand]

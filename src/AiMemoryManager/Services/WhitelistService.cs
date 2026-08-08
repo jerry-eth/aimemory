@@ -4,6 +4,8 @@ namespace AiMemoryManager.Services;
 
 public class WhitelistService
 {
+    internal static IReadOnlySet<string> SystemCriticalProcessNames => SystemCritical;
+
     private static readonly HashSet<string> SystemCritical = new(StringComparer.OrdinalIgnoreCase)
     {
         "system", "registry", "smss", "csrss", "wininit", "winlogon", "services",

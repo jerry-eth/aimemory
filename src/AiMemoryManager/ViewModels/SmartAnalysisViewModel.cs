@@ -30,6 +30,10 @@ public sealed record LeakAlertItem(string ProcessName, long GrowthMb, string Tim
 /// </summary>
 public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
 {
+    public static SmartAnalysisViewModel Instance { get; } = new();
+    public AnalysisResult? LastResult { get; private set; }
+    [ObservableProperty] private AnalysisReport? _report;
+    [ObservableProperty] private bool _hasReport;
     public ObservableCollection<SuggestionItemViewModel> Suggestions { get; } = new();
     public ObservableCollection<LeakAlertItem> LeakAlerts { get; } = new();
 
@@ -53,6 +57,9 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     /// <summary>手动与自动触发的分析结果统一从这里进 UI(AnalyzeAsync 内部先触发事件再返回,单一填充路径)。</summary>
     private void ApplyResult(AnalysisResult r)
     {
+        LastResult = r;
+        Report = AnalysisReportBuilder.Build(r, Locator.Native.GetSystemMemory(), Locator.Native.GetProcessSnapshots().Count);
+        HasReport = true;
         Suggestions.Clear();
         foreach (var s in r.Suggestions)
             Suggestions.Add(new SuggestionItemViewModel { Suggestion = s });
@@ -75,6 +82,13 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
             return false;
         }
         return true;
+    }
+
+    [RelayCommand]
+    private void OpenChat()
+    {
+        var dialog = new AnalysisChatDialog { Owner = System.Windows.Application.Current.MainWindow };
+        dialog.ShowDialog();
     }
 
     [RelayCommand]

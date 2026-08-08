@@ -91,7 +91,7 @@
   "Tokens.Input": "输入", "Tokens.Output": "输出", "Tokens.Calls": "调用次数", "Tokens.Cost": "估算费用",
   "Tokens.ByProfile": "按档案统计", "Tokens.Recent": "最近调用",
   "Tokens.Col.Time": "时间", "Tokens.Col.Profile": "档案", "Tokens.Col.Model": "模型", "Tokens.Col.Trigger": "触发",
-  "Tokens.Trigger.Manual": "手动", "Tokens.Trigger.Threshold": "阈值", "Tokens.Trigger.Timer": "定时", "Tokens.Trigger.Leak": "泄漏",
+  "Tokens.Trigger.Manual": "手动", "Tokens.Trigger.Threshold": "阈值", "Tokens.Trigger.Timer": "定时", "Tokens.Trigger.Leak": "泄漏", "Tokens.Trigger.Conversation": "对话",
   "Tokens.BudgetHit": "已达月度预算,自动分析已暂停",
   "L3.Terminate": "结束选中进程",
   "L3.ConfirmTitle": "确认结束进程",
@@ -114,7 +114,7 @@
   "Dash.HistoryEmpty": "暂无清理记录",
   "Dash.Level.L1": "轻量清理", "Dash.Level.L2": "深度清理", "Dash.Level.L3": "结束进程",
   "Dash.Trigger.Manual": "手动", "Dash.Trigger.RuleThreshold": "阈值规则",
-  "Dash.Trigger.RuleTimer": "定时规则", "Dash.Trigger.Tray": "托盘", "Dash.Trigger.Analysis": "智能分析",
+  "Dash.Trigger.RuleTimer": "定时规则", "Dash.Trigger.Tray": "托盘", "Dash.Trigger.Analysis": "智能分析", "Dash.Trigger.Conversation": "对话",
   "Nav.CSlim": "C 盘瘦身",
   "Slim.Scan": "扫描占用", "Slim.Scanning": "扫描中…", "Slim.Size": "大小", "Slim.Category": "类别",
   "Slim.FileCount": "文件数",
@@ -128,5 +128,11 @@
   "Slim.MigrateLog": "迁移记录", "Slim.MigrateLogEmpty": "暂无迁移记录", "Slim.Revert": "回退", "Slim.Reverted": "已回退", "Slim.RevertDone": "已回退 {0}",
   "Slim.RevertFailed": "回退失败",
   "Slim.Col.Source": "源", "Slim.Col.Target": "目标",
-  "Slim.Protected": "系统保护路径,不可操作", "Slim.Empty": "暂无数据,请先扫描"
+  "Slim.Protected": "系统保护路径,不可操作", "Slim.Empty": "暂无数据,请先扫描",
+  "Blacklist.Title": "黑名单自动终止", "Blacklist.Desc": "开启后，匹配黑名单的进程在启动后会被自动结束；系统关键进程和防误杀名单始终受保护。",
+  "Blacklist.Add": "加入黑名单", "Blacklist.Empty": "暂无黑名单进程", "Blacklist.Added": "已加入黑名单", "Blacklist.Removed": "已移出黑名单",
+  "Blacklist.EnableConfirm": "开启后，匹配黑名单的进程将在启动后自动结束。此功能存在误杀风险，确定开启吗？",
+  "Blacklist.Enabled": "黑名单自动终止已开启", "Blacklist.Disabled": "黑名单自动终止已关闭",
+  "Blacklist.NotifyTerminated": "黑名单已自动结束 {0}：{1}", "Blacklist.NotifySkipped": "黑名单进程 {0} 未执行：{1}",
+  "Analysis.ReportTitle": "分析报告", "Analysis.ReportSummary": "摘要", "Analysis.ReportMemory": "内存占用", "Analysis.ReportProcesses": "分析进程", "Analysis.ReportSuggestions": "建议数量", "Analysis.Chat": "继续对话", "Analysis.ChatTitle": "智能分析对话", "Analysis.ChatPlaceholder": "询问分析结果，或描述你希望执行的清理操作…", "Analysis.ChatSend": "发送", "Analysis.ChatExecute": "执行建议", "Analysis.ChatNoPlan": "本次仅提供说明，不执行操作。", "Analysis.ChatPlan": "待确认执行计划", "Analysis.ChatConfirm": "该操作会改变系统状态，确认后才会执行。", "Analysis.ChatExecuted": "已执行：释放 {0} MB，处理 {1} 项，失败 {2} 项", "Analysis.ChatPlanNone": "无可执行计划"
 }
