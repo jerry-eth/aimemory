@@ -22,6 +22,7 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _lastCleanText = "";
     [ObservableProperty] private bool _isCleaning;
     [ObservableProperty] private List<double> _recent = new();
+    [ObservableProperty] private List<MemorySample> _recentSamples = new();
 
     /// <summary>清理历史卡(最新 10 条)。History.Changed 可能在线程池线程触发,须 Dispatcher 封送。</summary>
     public ObservableCollection<HistoryRow> HistoryRows { get; } = new();
@@ -64,7 +65,8 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
         TotalText = $"{info.TotalBytes / (1 << 30)} GB";
         AvailableText = $"{info.AvailableBytes / (1 << 30)} GB";
         UsedText = $"{(info.TotalBytes - info.AvailableBytes) / (1 << 30)} GB";
-        Recent = m.RecentPercents.ToList();
+        RecentSamples = m.RecentSamples.ToList();
+        Recent = RecentSamples.Select(s => s.UsedPercent).ToList();
     }
 
     private void OnCleaned(object? s, CleanResult r) =>

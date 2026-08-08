@@ -13,7 +13,7 @@
     <Page.DataContext>
         <vm:SmartAnalysisViewModel/>
     </Page.DataContext>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
         <StackPanel Margin="24">
             <!-- 顶部操作条:开始分析 + 状态 + Token 用量(AsyncRelayCommand 执行中自动禁用按钮) -->
             <ui:Card Margin="0,4">

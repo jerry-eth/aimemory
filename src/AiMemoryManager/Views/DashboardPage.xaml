@@ -12,7 +12,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </Page.Resources>
     <!-- 加了清理历史卡后内容可能超出窗口高度,整体可滚动 -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
     <StackPanel Margin="24">
         <!-- 英雄区:大圆环 + 主操作 -->
         <Grid Margin="0,12">
@@ -68,10 +68,20 @@
         </UniformGrid>
         <!-- 迷你曲线(最近 5 分钟,150 个采样点) -->
         <ui:Card Margin="0,4">
-            <Polyline x:Name="MiniChart" Height="60" Stretch="Fill" Margin="16"
-                      Stroke="{DynamicResource SystemFillColorAttentionBrush}" StrokeThickness="2"/>
-        </ui:Card>
-        <!-- 清理历史卡(最新 10 条:时间/级别/释放/触发方式) -->
+            <StackPanel Margin="16">
+                <TextBlock Text="{Binding [Dashboard.Timeline], Source={x:Static services:Locator.L10n}}"
+                           FontWeight="SemiBold"/>
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="60"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Polyline x:Name="MiniChart" Stretch="Fill"
+                              Stroke="{DynamicResource SystemFillColorAttentionBrush}" StrokeThickness="2"/>
+                    <UniformGrid x:Name="TimelineLabels" Grid.Row="1" Rows="1" Columns="5" Margin="0,4,0,0"/>
+                </Grid>
+            </StackPanel>
+        </ui:Card>        <!-- 清理历史卡(最新 10 条:时间/级别/释放/触发方式) -->
         <ui:Card Margin="0,4">
             <Grid Margin="16">
                 <Grid.RowDefinitions>

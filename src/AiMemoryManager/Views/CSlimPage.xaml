@@ -17,6 +17,7 @@
             <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
             <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
         <Style x:Key="SlimGrid" TargetType="DataGrid">
             <Setter Property="AutoGenerateColumns" Value="False"/>
@@ -25,13 +26,15 @@
             <Setter Property="SelectionMode" Value="Single"/>
             <Setter Property="SelectionUnit" Value="FullRow"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
-            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="GridLinesVisibility" Value="All"/>
             <Setter Property="Background" Value="{x:Null}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="RowBackground" Value="{x:Null}"/>
             <Setter Property="AlternatingRowBackground" Value="{x:Null}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
             <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}"/>
+            <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ColumnHeaderStyle" Value="{StaticResource SlimGridHeader}"/>
         </Style>
         <!-- 勾选列模板:两张建议表共用 -->
@@ -40,8 +43,8 @@
                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </DataTemplate>
     </Page.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="24">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
+        <StackPanel Margin="24" MinWidth="860">
             <!-- ① 扫描结果卡:扫描/LLM 分析按钮 + 状态文本 + 结果表(路径/大小/类别/文件数) -->
             <ui:Card Margin="0,4">
                 <StackPanel Margin="16">
@@ -78,7 +81,7 @@
                     <TextBlock Text="{Binding [Slim.Cleanable], Source={x:Static services:Locator.L10n}}"
                                FontWeight="SemiBold"/>
                     <DataGrid Style="{StaticResource SlimGrid}" ItemsSource="{Binding Cleanable}"
-                              MaxHeight="240" Margin="0,8,0,0">
+                              MaxHeight="240" MinHeight="48" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Width="40" CellTemplate="{StaticResource SelectCell}"/>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
@@ -100,7 +103,7 @@
                     <TextBlock Text="{Binding [Slim.Migratable], Source={x:Static services:Locator.L10n}}"
                                FontWeight="SemiBold"/>
                     <DataGrid Style="{StaticResource SlimGrid}" ItemsSource="{Binding Migratable}"
-                              MaxHeight="240" Margin="0,8,0,0">
+                              MaxHeight="240" MinHeight="48" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Width="40" CellTemplate="{StaticResource SelectCell}"/>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
@@ -121,17 +124,17 @@
                 <StackPanel Margin="16">
                     <TextBlock Text="{Binding [Slim.MigrateLog], Source={x:Static services:Locator.L10n}}"
                                FontWeight="SemiBold"/>
-                    <DataGrid Style="{StaticResource SlimGrid}" ItemsSource="{Binding MigrationLog}"
-                              MaxHeight="240" Margin="0,8,0,0">
+                    <DataGrid Style="{StaticResource SlimGrid}" ItemsSource="{Binding MigrationLog}" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              MaxHeight="240" MinHeight="48" Margin="0,8,0,0">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="{Binding [Tokens.Col.Time], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding TimeText}" Width="*"/>
+                                                Binding="{Binding TimeText}" Width="*" MinWidth="110"/>
                             <DataGridTextColumn Header="{Binding [Slim.Col.Source], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Source}" Width="2*"/>
+                                                Binding="{Binding Source}" Width="2*" MinWidth="220"/>
                             <DataGridTextColumn Header="{Binding [Slim.Col.Target], Source={x:Static services:Locator.L10n}}"
-                                                Binding="{Binding Target}" Width="2*"/>
+                                                Binding="{Binding Target}" Width="2*" MinWidth="220"/>
                             <DataGridTemplateColumn Header="{Binding [Slim.Revert], Source={x:Static services:Locator.L10n}}"
-                                                    Width="*">
+                                                    Width="*" MinWidth="110">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <Grid>
@@ -148,6 +151,9 @@
                             </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
+                    <TextBlock Text="{Binding [Slim.MigrateLogEmpty], Source={x:Static services:Locator.L10n}}"
+                               Visibility="{Binding HasMigrationLog, Converter={StaticResource InvBoolToVis}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0"/>
                 </StackPanel>
             </ui:Card>
         </StackPanel>

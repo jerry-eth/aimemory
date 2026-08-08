@@ -65,12 +65,12 @@
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
                 <!-- L3 勾选列:系统关键/白名单/防误杀/前台行(CanKill=false)禁用 -->
-                <DataGridTemplateColumn Width="44" MinWidth="44">
+                <DataGridTemplateColumn Width="64" MinWidth="64">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       IsEnabled="{Binding CanKill}"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

@@ -11,7 +11,7 @@
     <Page.DataContext>
         <vm:SettingsViewModel/>
     </Page.DataContext>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
         <StackPanel Margin="24">
             <!-- 语言卡 -->
             <ui:Card Margin="0,4">

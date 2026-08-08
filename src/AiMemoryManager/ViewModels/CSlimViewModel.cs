@@ -64,6 +64,7 @@ public partial class CSlimViewModel : ObservableObject
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private bool _isAnalyzing;
     [ObservableProperty] private bool _hasScanResults;
+    [ObservableProperty] private bool _hasMigrationLog;
 
     public CSlimViewModel() => RefreshMigrationLog();
 
@@ -259,5 +260,6 @@ public partial class CSlimViewModel : ObservableObject
     {
         MigrationLog.Clear();
         foreach (var e in Locator.Migration.Log) MigrationLog.Add(new MigrationLogRow(e));
+        HasMigrationLog = MigrationLog.Count > 0;
     }
 }
