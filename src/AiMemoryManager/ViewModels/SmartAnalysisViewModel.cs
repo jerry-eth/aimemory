@@ -26,7 +26,7 @@ public sealed record LeakAlertItem(string ProcessName, long GrowthMb, string Tim
 
 /// <summary>
 /// 智能分析页 VM。AnalysisCompleted 在线程池线程触发(调度器自动触发时页面也可能开着),
-/// 订阅处必须 Dispatcher 封送;页面 Unloaded 时 Dispose 退订,避免泄漏(与 DashboardViewModel 一致)。
+/// 订阅处必须 Dispatcher 封送;页面切换时由页面级共享实例继续接收结果。
 /// </summary>
 public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
 {

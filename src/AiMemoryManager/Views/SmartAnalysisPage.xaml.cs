@@ -1,24 +1,17 @@
 using System.Windows.Controls;
+using AiMemoryManager.Services;
 using AiMemoryManager.ViewModels;
 
 namespace AiMemoryManager.Views;
 
 public partial class SmartAnalysisPage : Page
 {
-    private SmartAnalysisViewModel? _vm;
+    // NavigationView 切换页面时会重建 Page；VM 放在页面静态缓存中，保证分析结果和进行中的任务不丢失。
+    private static readonly SmartAnalysisViewModel SharedViewModel = new();
 
     public SmartAnalysisPage()
     {
         InitializeComponent();
-        _vm = DataContext as SmartAnalysisViewModel;
-        Unloaded += OnUnloaded;
-    }
-
-    private void OnUnloaded(object sender, System.Windows.RoutedEventArgs e)
-    {
-        // NavigationView 每次导航重建页面;退订 AnalysisCompleted,防止事件订阅泄漏(同 DashboardPage)
-        _vm?.Dispose();
-        _vm = null;
-        Unloaded -= OnUnloaded;
+        DataContext = SharedViewModel;
     }
 }

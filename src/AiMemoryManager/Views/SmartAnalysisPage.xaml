@@ -2,7 +2,6 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:conv="clr-namespace:AiMemoryManager.Converters"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Analysis], Source={x:Static services:Locator.L10n}}">
@@ -10,9 +9,6 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
     </Page.Resources>
-    <Page.DataContext>
-        <vm:SmartAnalysisViewModel/>
-    </Page.DataContext>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
         <StackPanel Margin="24">
             <!-- 顶部操作条:开始分析 + 状态 + Token 用量(AsyncRelayCommand 执行中自动禁用按钮) -->

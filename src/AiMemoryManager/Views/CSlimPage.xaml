@@ -2,13 +2,9 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-      xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:conv="clr-namespace:AiMemoryManager.Converters"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.CSlim], Source={x:Static services:Locator.L10n}}">
-    <Page.DataContext>
-        <vm:CSlimViewModel/>
-    </Page.DataContext>
     <Page.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
