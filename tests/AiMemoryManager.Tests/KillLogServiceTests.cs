@@ -22,13 +22,30 @@ public class KillLogServiceTests : IDisposable
         Assert.Equal(25, s.Records[0].Pid);
     }
 
-    [Fact] public void 命令行由提供器补全()
+    [Fact] public void 命令行由提供器补全_剥离exe自身路径()
     {
         var s = new KillLogService(_path, commandLineProvider: pid => pid == 7 ? "\"C:\\apps\\x.exe\" /fast" : null);
         s.Record(R(7));
-        Assert.Equal("\"C:\\apps\\x.exe\" /fast", s.Records[0].Arguments);
+        Assert.Equal("/fast", s.Records[0].Arguments);   // exe 路径已剥离,只剩参数
         s.Record(R(8));
         Assert.Null(s.Records[0].Arguments);
+    }
+
+    [Fact] public void StripExecutable_引号路径带参数()
+    {
+        Assert.Equal("/fast", KillLogService.StripExecutable("\"C:\\Program Files\\app\\x.exe\" /fast"));
+    }
+
+    [Fact] public void StripExecutable_无引号路径带参数()
+    {
+        Assert.Equal("-a -b", KillLogService.StripExecutable("C:\\apps\\x.exe -a -b"));
+    }
+
+    [Fact] public void StripExecutable_裸exe无参数返回null()
+    {
+        Assert.Null(KillLogService.StripExecutable("C:\\apps\\x.exe"));
+        Assert.Null(KillLogService.StripExecutable("\"C:\\apps\\x.exe\""));
+        Assert.Null(KillLogService.StripExecutable(null));
     }
 
     [Fact] public void Restart调用starter并返回true()

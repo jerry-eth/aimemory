@@ -7,7 +7,7 @@ using AiMemoryManager.Native;
 namespace AiMemoryManager.Services;
 
 /// <summary>
-/// 文件夹跨盘迁移(FR-12.4):robocopy /E 复制 → 文件数校验 → 删源 → mklink /J 建 junction → 记日志 → 一键回退。
+/// 文件夹跨盘迁移(FR-12.4):robocopy /E 复制 → 文件数校验 → 删源 → 记日志 → mklink /J 建 junction → 一键回退。
 /// 外部命令经注入的 runner 执行(测试替身不跑真实 robocopy/mklink)。
 /// 安全顺序:任何失败都发生在删源之前,保证用户数据不丢;只有校验通过后才永久删除源。
 /// </summary>
@@ -103,17 +103,18 @@ public class MigrationService
         //    UI(T12)在执行前已弹出明确警告;此刻副本已校验完整,删源不丢数据
         Directory.Delete(source, recursive: true);
 
-        // ⑤ 原位置建 junction
-        int mk = _runner(new[] { "mklink", "/J", source, target });
-        if (mk != 0)
-            // 数据已完整位于 target,仅缺 junction;抛出让 UI 提示手动 mklink 或一键回退
-            throw new InvalidOperationException($"创建 Junction 失败(mklink 退出码 {mk});数据已完整迁移至 {target}");
-
-        // ⑥ 记日志(原子写,容量 50,新在前)
+        // ⑤ 先记日志(原子写,容量 50,新在前):必须在 mklink 之前落盘,
+        //    否则 mklink 失败时源已删、数据在 target 却无日志,一键回退通道丢失
         var entry = new MigrationLogEntry(DateTimeOffset.Now, source, target, source, false);
         _log.AddFirst(entry);
         while (_log.Count > LogCapacity) _log.RemoveLast();
         Persist();
+
+        // ⑥ 原位置建 junction;失败仅缺链接,日志已在,UI 可提示手动 mklink 或一键回退
+        int mk = _runner(new[] { "mklink", "/J", source, target });
+        if (mk != 0)
+            throw new InvalidOperationException($"创建 Junction 失败(mklink 退出码 {mk});数据已完整迁移至 {target},可在历史中一键回退");
+
         return entry;
     }
 

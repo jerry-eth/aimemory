@@ -39,7 +39,8 @@ public class KillLogService
         string? args = record.Arguments;
         if (args == null)
         {
-            try { args = _cmdline(record.Pid); } catch { args = null; }
+            // WMI CommandLine 含 exe 自身路径,只保留参数部分;否则 Restart 会把 exe 路径当文档再传一遍
+            try { args = StripExecutable(_cmdline(record.Pid)); } catch { args = null; }
         }
         _records.AddFirst(record with { Arguments = args });
         while (_records.Count > Capacity) _records.RemoveLast();
@@ -55,6 +56,30 @@ public class KillLogService
 
     private static void DefaultStart(string path, string? args) =>
         Process.Start(new ProcessStartInfo(path) { Arguments = args ?? "", UseShellExecute = true });
+
+    /// <summary>
+    /// 去掉命令行首 token(exe 自身路径),只保留参数;无参数时返回 null。
+    /// 处理引号路径:"C:\a b\x.exe" /fast → /fast;裸 exe(无空格)视为无参数。
+    /// </summary>
+    public static string? StripExecutable(string? commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine)) return null;
+        commandLine = commandLine.TrimStart();
+        int end;
+        if (commandLine[0] == '"')
+        {
+            end = commandLine.IndexOf('"', 1);
+            if (end < 0) return null;   // 引号未闭合:整条视为 exe 路径,无参数
+            end++;
+        }
+        else
+        {
+            end = commandLine.IndexOf(' ');
+            if (end < 0) return null;   // 裸 exe 无参数
+        }
+        var rest = commandLine[end..].Trim();
+        return rest.Length == 0 ? null : rest;
+    }
 
     private static string? WmiCommandLine(int pid)
     {

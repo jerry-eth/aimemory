@@ -65,6 +65,27 @@ public class MigrationServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_src, "a.dat")));
     }
 
+    [Fact] public async Task mklink失败_日志已落盘且可一键回退()
+    {
+        // mklink 退出码非 0:junction 未建,但源已删、数据在 target —— 日志必须已存在,回退必须能恢复
+        var svc = new MigrationService(_native, _log, runner: args =>
+        {
+            _runs.Add(args);
+            return args[0] == "mklink" ? 1 : RunFake(args);
+        });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MigrateAsync(_src, _dst));
+        Assert.False(Directory.Exists(_src));                              // 源已删
+        Assert.True(File.Exists(Path.Combine(_dst, "Games", "a.dat")));    // 数据完整在 target
+        var entry = Assert.Single(svc.Log);                                // 日志已落盘
+        Assert.False(entry.Reverted);
+        Assert.True(File.Exists(_log));                                    // 且已持久化到磁盘
+        // junction 从未创建,回退仍须成功:robocopy 移回 + 删除 target 副本
+        Assert.True(await svc.RevertAsync(entry));
+        Assert.True(File.Exists(Path.Combine(_src, "a.dat")));
+        Assert.False(Directory.Exists(Path.Combine(_dst, "Games")));
+        Assert.True(svc.Log[0].Reverted);
+    }
+
     [Fact] public async Task 回退_删Junction移回源更新日志()
     {
         var svc = Svc();

@@ -120,7 +120,7 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                     <ui:Button Grid.Column="3"
                                                Content="{Binding [L3.Restore], Source={x:Static services:Locator.L10n}}"
-                                               Command="{Binding DataContext.RestoreAsyncCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                               Command="{Binding DataContext.RestoreCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
                                                CommandParameter="{Binding}"/>
                                 </Grid>
                             </DataTemplate>

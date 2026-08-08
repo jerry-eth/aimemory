@@ -82,16 +82,26 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _hotkeyFailed;   // 热键被占用时设置页提示
 
-    /// <summary>FR-8.5 改键:写入设置并按当前主窗口句柄重新注册;失败(被占用)置 HotkeyFailed 降级提示。</summary>
+    /// <summary>FR-8.5 改键:先尝试注册新组合,成功才持久化;失败(被占用)回滚注册旧组合、不写设置,置 HotkeyFailed 降级提示。</summary>
     public void SetHotkey(int modifiers, int key)
     {
+        int oldModifiers = Locator.Settings.Current.HotkeyModifiers;
+        int oldKey = Locator.Settings.Current.HotkeyKey;
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(Application.Current.MainWindow).Handle;
+        if (hwnd != IntPtr.Zero && !Locator.Hotkey.Register(hwnd, modifiers, key))
+        {
+            // 新组合被占用:HotkeyService.Register 内部已先注销旧组合,必须立即回滚重注册,
+            // 否则旧热键死掉且死组合被持久化,功能静默丢失
+            Locator.Hotkey.Register(hwnd, oldModifiers, oldKey);
+            HotkeyFailed = true;
+            OnPropertyChanged(nameof(HotkeyText));
+            return;
+        }
+        // 注册成功(或窗口句柄未就绪,注册将在下次启动时按设置执行)才持久化
         Locator.Settings.Current.HotkeyModifiers = modifiers;
         Locator.Settings.Current.HotkeyKey = key;
         Locator.Settings.Save();
         HotkeyFailed = false;
-        var hwnd = new System.Windows.Interop.WindowInteropHelper(Application.Current.MainWindow).Handle;
-        if (hwnd != IntPtr.Zero && !Locator.Hotkey.Register(hwnd, modifiers, key))
-            HotkeyFailed = true;
         OnPropertyChanged(nameof(HotkeyText));
     }
 

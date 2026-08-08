@@ -26,6 +26,7 @@
 - [ ] 设置页打开「开机自启」→ 注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下出现 `AiMemoryManager` 值(可用 `regedit` 或 `reg query` 核对)
 - [ ] (可选)重启资源管理器或注销重登 → 应用随系统启动
 - [ ] 关闭开关 → 该注册表值消失
+- 注意:必须用编译产物的 exe(`dotnet build` / `dotnet publish` 输出)验证自启,不能用 `dotnet run` —— 后者 `Environment.ProcessPath` 指向 `dotnet.exe`,写入注册表的会是错误的启动路径。
 
 ## 6. 通知开关
 - [ ] 关闭「清理完成通知」→ 执行一次清理 → **不弹**系统通知
