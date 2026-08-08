@@ -59,9 +59,6 @@ public class LlmProfileService
         _settings.Save();
     }
 
-    private void Persist()
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_profiles, JsonOpts));
-    }
+    private void Persist() =>
+        AtomicFile.WriteAllText(_path, JsonSerializer.Serialize(_profiles, JsonOpts));
 }

@@ -35,8 +35,7 @@ public class SettingsService
 
     public void Save()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(Current, JsonOpts));
+        AtomicFile.WriteAllText(_path, JsonSerializer.Serialize(Current, JsonOpts));
         SettingsSaved?.Invoke(this, EventArgs.Empty);
     }
 }

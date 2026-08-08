@@ -62,7 +62,7 @@ public class DiskAdviceService
         var advice = Filter(Parse(resp.Content), scan);
 
         _stats.Record(new TokenUsageRecord(DateTimeOffset.Now, profile.Name, profile.Model,
-            resp.Usage.InputTokens, resp.Usage.OutputTokens, AnalysisTrigger.Manual));
+            resp.Usage.InputTokens, resp.Usage.OutputTokens, AnalysisTrigger.Manual, profile.Id));
 
         AdviceCompleted?.Invoke(this, advice);
         return advice;

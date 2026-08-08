@@ -68,4 +68,25 @@ public class TokenStatsServiceTests : IDisposable
         var all = Svc().LoadAll();
         Assert.Single(all);
     }
+
+    [Fact] public void 旧记录无ProfileId兼容读取()
+    {
+        // 手写一行 M2 旧格式 jsonl(无 ProfileId 字段),LoadAll 不丢、ProfileId 为 null
+        var line = """{"Time":"2026-08-07T12:00:00+00:00","ProfileName":"ds","Model":"m","InputTokens":10,"OutputTokens":5,"Trigger":0}""";
+        File.WriteAllText(Path.Combine(_dir, "usage.jsonl"), line + "\n");
+        var all = Svc().LoadAll();
+        var r = Assert.Single(all);
+        Assert.Equal("ds", r.ProfileName);
+        Assert.Equal(10, r.InputTokens);
+        Assert.Null(r.ProfileId);
+    }
+
+    [Fact] public void 新记录带ProfileId()
+    {
+        var s = Svc();
+        s.Record(Rec(100, 50, AnalysisTrigger.Manual) with { ProfileId = "p-1" });
+        var r = Assert.Single(Svc().LoadAll());
+        Assert.Equal("p-1", r.ProfileId);
+        Assert.Equal(100, r.InputTokens);
+    }
 }

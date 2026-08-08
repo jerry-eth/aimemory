@@ -54,11 +54,8 @@ public class AnalysisCacheService
             _entries[hash] = new Entry(now, suggestions.ToList());
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 // 原子写:先写临时文件再替换,进程中断也不会留下半个 JSON
-                var tmp = _path + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(_entries));
-                File.Move(tmp, _path, overwrite: true);
+                AtomicFile.WriteAllText(_path, JsonSerializer.Serialize(_entries));
             }
             catch { /* 缓存写失败不致命 */ }
         }

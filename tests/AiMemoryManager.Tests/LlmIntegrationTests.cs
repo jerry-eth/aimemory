@@ -9,10 +9,10 @@ public class LlmIntegrationTests
     private static string BaseUrl => Environment.GetEnvironmentVariable("AMM_TEST_LLM_URL") ?? "https://api.deepseek.com/v1";
     private static string Model => Environment.GetEnvironmentVariable("AMM_TEST_LLM_MODEL") ?? "deepseek-v4-flash";
 
-    [Fact]
+    [SkippableFact]
     public async Task 真实端点_ListModels可用()
     {
-        if (string.IsNullOrEmpty(Key)) return;   // 无密钥环境自动跳过
+        Skip.If(string.IsNullOrEmpty(Key), "未配置 AMM_TEST_LLM_KEY");
         var client = new OpenAiCompatibleClient();
         var profile = new LlmProfile
         {
@@ -23,10 +23,10 @@ public class LlmIntegrationTests
         Assert.NotEmpty(models);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task 真实端点_分析输出可解析()
     {
-        if (string.IsNullOrEmpty(Key)) return;
+        Skip.If(string.IsNullOrEmpty(Key), "未配置 AMM_TEST_LLM_KEY");
         var client = new OpenAiCompatibleClient();
         var profile = new LlmProfile
         {

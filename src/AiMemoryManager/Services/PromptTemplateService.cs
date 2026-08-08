@@ -81,9 +81,6 @@ public class PromptTemplateService
         Persist();
     }
 
-    private void Persist()
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_templates, JsonOpts));
-    }
+    private void Persist() =>
+        AtomicFile.WriteAllText(_path, JsonSerializer.Serialize(_templates, JsonOpts));
 }

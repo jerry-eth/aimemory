@@ -4,8 +4,9 @@ using AiMemoryManager.Models;
 
 namespace AiMemoryManager.Services;
 
+// ProfileId 放最后并给默认值:M2 旧 jsonl 行无此字段,STJ 反序列化缺失字段时用默认值(null)保兼容
 public record TokenUsageRecord(DateTimeOffset Time, string ProfileName, string Model,
-    int InputTokens, int OutputTokens, AnalysisTrigger Trigger);
+    int InputTokens, int OutputTokens, AnalysisTrigger Trigger, string? ProfileId = null);
 public record TokenAggregate(int InputTokens, int OutputTokens, int CallCount);
 
 public class TokenStatsService

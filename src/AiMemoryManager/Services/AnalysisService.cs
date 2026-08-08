@@ -65,7 +65,7 @@ public class AnalysisService
 
             // 5. Token 记录 + 缓存
             _stats.Record(new TokenUsageRecord(DateTimeOffset.Now, profile.Name, profile.Model,
-                resp.Usage.InputTokens, resp.Usage.OutputTokens, trigger));
+                resp.Usage.InputTokens, resp.Usage.OutputTokens, trigger, profile.Id));
             _cache.Store(hash, suggestions);
 
             return Finish(new AnalysisResult(DateTimeOffset.Now, suggestions, resp.Usage, profile.Model, false, trigger));

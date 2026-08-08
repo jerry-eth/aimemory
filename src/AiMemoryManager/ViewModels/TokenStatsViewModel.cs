@@ -39,26 +39,42 @@ public partial class TokenStatsViewModel : ObservableObject
         MonthText = Format(stats.AggregateMonth());
 
         var all = stats.LoadAll();
-        var prices = Locator.Profiles.Profiles
-            .GroupBy(p => p.Name)                      // 同名档案(历史遗留)取第一个,不崩
-            .ToDictionary(g => g.Key, g => g.First().PricePerMillionTokens);
+        var profiles = Locator.Profiles.Profiles;
+        var byId = profiles.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First());
+        // 同名档案(历史遗留)取第一个,不崩
+        var byName = profiles.GroupBy(p => p.Name).ToDictionary(g => g.Key, g => g.First());
+
+        // 费用/分组优先按 ProfileId 匹配档案;ProfileId 为 null(M2 旧记录)回退按档案名 —— 旧数据兼容
+        string GroupKey(TokenUsageRecord r) => r.ProfileId ?? r.ProfileName;
+        double PriceOf(TokenUsageRecord r)
+        {
+            if (r.ProfileId != null && byId.TryGetValue(r.ProfileId, out var pi))
+                return pi.PricePerMillionTokens;
+            return byName.TryGetValue(r.ProfileName, out var pn) ? pn.PricePerMillionTokens : 0;
+        }
+        string DisplayName(IGrouping<string, TokenUsageRecord> g)
+        {
+            var first = g.First();
+            return first.ProfileId != null && byId.TryGetValue(first.ProfileId, out var p)
+                ? p.Name : first.ProfileName;
+        }
 
         // 费用:各档案单价 × 该档案本月累计(缺价按 0)
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset);
         double monthCost = 0;
-        foreach (var g in all.Where(r => r.Time >= monthStart).GroupBy(r => r.ProfileName))
-            monthCost += Price(prices, g.Key) * (g.Sum(r => r.InputTokens) + g.Sum(r => r.OutputTokens)) / 1_000_000d;
+        foreach (var g in all.Where(r => r.Time >= monthStart).GroupBy(GroupKey))
+            monthCost += PriceOf(g.First()) * (g.Sum(r => r.InputTokens) + g.Sum(r => r.OutputTokens)) / 1_000_000d;
         CostText = monthCost > 0 ? monthCost.ToString("$0.0000") : "-";
 
         var budget = Locator.Settings.Current.MonthlyTokenBudget;
         BudgetHit = budget > 0 && !stats.IsAutoTriggerAllowed(budget);
 
         ByProfile.Clear();
-        foreach (var g in all.GroupBy(r => r.ProfileName)
+        foreach (var g in all.GroupBy(GroupKey)
                              .OrderByDescending(g => g.Sum(r => r.InputTokens + r.OutputTokens)))
         {
-            var cost = Price(prices, g.Key) * (g.Sum(r => r.InputTokens) + g.Sum(r => r.OutputTokens)) / 1_000_000d;
-            ByProfile.Add(new ProfileAggRow(g.Key,
+            var cost = PriceOf(g.First()) * (g.Sum(r => r.InputTokens) + g.Sum(r => r.OutputTokens)) / 1_000_000d;
+            ByProfile.Add(new ProfileAggRow(DisplayName(g),
                 g.Sum(r => r.InputTokens).ToString("N0"),
                 g.Sum(r => r.OutputTokens).ToString("N0"),
                 g.Count().ToString("N0"),
@@ -72,9 +88,6 @@ public partial class TokenStatsViewModel : ObservableObject
                 r.InputTokens.ToString("N0"), r.OutputTokens.ToString("N0"),
                 Locator.L10n["Tokens.Trigger." + r.Trigger]));
     }
-
-    private static double Price(Dictionary<string, double> prices, string name) =>
-        prices.TryGetValue(name, out var p) ? p : 0;
 
     private static string Format(TokenAggregate a)
     {
