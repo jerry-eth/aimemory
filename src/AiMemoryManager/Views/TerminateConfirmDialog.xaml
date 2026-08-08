@@ -1,0 +1,59 @@
+<ui:FluentWindow x:Class="AiMemoryManager.Views.TerminateConfirmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:services="clr-namespace:AiMemoryManager.Services"
+        Title="{Binding [L3.ConfirmTitle], Source={x:Static services:Locator.L10n}}"
+        Width="560" SizeToContent="Height" MinHeight="200"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        WindowBackdropType="None">
+    <ui:FluentWindow.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </ui:FluentWindow.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <!-- 进程清单:名称/内存/路径,命中未保存检测的行加红色高风险标记 -->
+        <ListView x:Name="ItemList" MaxHeight="280" BorderThickness="0" Background="{x:Null}">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                <!-- FR-2.6:未保存迹象 → 红色高风险标记 -->
+                                <TextBlock Text="{Binding [L3.HighRisk], Source={x:Static services:Locator.L10n}}"
+                                           Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                           FontWeight="SemiBold" Margin="8,0,0,0"
+                                           Visibility="{Binding IsHighRisk, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Path}" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding MemoryText}"
+                                   VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock x:Name="SummaryText" Grid.Row="1" Margin="0,12,0,0" FontWeight="SemiBold"/>
+        <TextBlock x:Name="WarningText" Grid.Row="2" Margin="0,8,0,0" TextWrapping="Wrap"
+                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                   Visibility="Collapsed"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <ui:Button Content="{Binding [L3.Cancel], Source={x:Static services:Locator.L10n}}"
+                       Click="OnCancel" MinWidth="88"/>
+            <ui:Button Content="{Binding [L3.Confirm], Source={x:Static services:Locator.L10n}}"
+                       Appearance="Danger" Click="OnConfirm" MinWidth="88" Margin="8,0,0,0"/>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

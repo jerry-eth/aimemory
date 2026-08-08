@@ -1,9 +1,13 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using AiMemoryManager.Models;
 using AiMemoryManager.Services;
 
 namespace AiMemoryManager.ViewModels;
+
+/// <summary>清理历史卡一行:级别与触发方式经 i18n 转为本地化文本。</summary>
+public record HistoryRow(string TimeText, string LevelText, string FreedText, string TriggerText);
 
 /// <summary>
 /// 仪表盘页 VM:订阅监控采样与清理完成事件(两者均发生在线程池线程,需 Dispatcher 封送)。
@@ -19,11 +23,34 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isCleaning;
     [ObservableProperty] private List<double> _recent = new();
 
+    /// <summary>清理历史卡(最新 10 条)。History.Changed 可能在线程池线程触发,须 Dispatcher 封送。</summary>
+    public ObservableCollection<HistoryRow> HistoryRows { get; } = new();
+    public bool HasHistory => HistoryRows.Count > 0;
+    public bool HistoryEmpty => HistoryRows.Count == 0;
+
     public DashboardViewModel()
     {
         Locator.Monitor.Sampled += OnSampled;
         Locator.Clean.CleanCompleted += OnCleaned;
+        Locator.History.Changed += OnHistoryChanged;
+        RebuildHistory();
         Refresh();
+    }
+
+    private void OnHistoryChanged(object? s, EventArgs e) =>
+        App.Current.Dispatcher.Invoke(RebuildHistory);
+
+    private void RebuildHistory()
+    {
+        HistoryRows.Clear();
+        foreach (var e in Locator.History.Entries.Take(10))
+            HistoryRows.Add(new HistoryRow(
+                e.Time.ToString("MM-dd HH:mm"),
+                Locator.L10n[$"Dash.Level.{e.Level}"],
+                $"{e.FreedBytes / (1 << 20)} MB",
+                Locator.L10n[$"Dash.Trigger.{e.Trigger}"]));
+        OnPropertyChanged(nameof(HasHistory));
+        OnPropertyChanged(nameof(HistoryEmpty));
     }
 
     private void OnSampled(object? s, SystemMemoryInfo info) =>
@@ -74,5 +101,6 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     {
         Locator.Monitor.Sampled -= OnSampled;
         Locator.Clean.CleanCompleted -= OnCleaned;
+        Locator.History.Changed -= OnHistoryChanged;
     }
 }

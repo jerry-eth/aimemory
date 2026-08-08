@@ -5,6 +5,9 @@
       xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
       Title="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}">
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Page.Resources>
     <Page.DataContext>
         <vm:ProcessesViewModel/>
     </Page.DataContext>
@@ -12,9 +15,17 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <ui:Button Content="{Binding [Processes.Refresh], Source={x:Static services:Locator.L10n}}"
-                   Command="{Binding RefreshCommand}" HorizontalAlignment="Left"/>
+        <!-- 操作条:刷新 + 结束选中(无勾选或全部不可杀时禁用)+ 结果状态文本 -->
+        <StackPanel Orientation="Horizontal">
+            <ui:Button Content="{Binding [Processes.Refresh], Source={x:Static services:Locator.L10n}}"
+                       Command="{Binding RefreshCommand}"/>
+            <ui:Button Content="{Binding [L3.Terminate], Source={x:Static services:Locator.L10n}}"
+                       Appearance="Danger" Command="{Binding TerminateSelectedCommand}" Margin="8,0,0,0"/>
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Margin="12,0,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </StackPanel>
         <!-- WPF-UI 4.3.0 不为原生 DataGrid 提供主题,这里只用 DynamicResource 画刷做最低限度适配 -->
         <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" AutoGenerateColumns="False"
                   IsReadOnly="True" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow"
@@ -50,6 +61,16 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
+                <!-- L3 勾选列:系统关键/白名单/防误杀/前台行(CanKill=false)禁用 -->
+                <DataGridTemplateColumn Width="40">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding CanKill}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="{Binding [Processes.Col.Name], Source={x:Static services:Locator.L10n}}"
                                     Binding="{Binding Name}" Width="2*"/>
                 <DataGridTextColumn Header="{Binding [Processes.Col.Memory], Source={x:Static services:Locator.L10n}}"
@@ -68,5 +89,48 @@
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
+        <!-- FR-2.7 后悔药卡:最近被结束的进程,可一键恢复 -->
+        <ui:Card Grid.Row="2" Margin="0,12,0,0">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding [L3.UndoTitle], Source={x:Static services:Locator.L10n}}"
+                           FontWeight="SemiBold"/>
+                <Grid Grid.Row="1" Margin="0,8,0,0">
+                    <ListView ItemsSource="{Binding KillLogRecords}" MaxHeight="160"
+                              BorderThickness="0" Background="{x:Null}"
+                              Visibility="{Binding HasKillLog, Converter={StaticResource BoolToVis}}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Time, StringFormat=MM-dd HH:mm}"
+                                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                                               Margin="0,0,12,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Path}" VerticalAlignment="Center"
+                                               Margin="0,0,12,0" TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <ui:Button Grid.Column="3"
+                                               Content="{Binding [L3.Restore], Source={x:Static services:Locator.L10n}}"
+                                               Command="{Binding DataContext.RestoreAsyncCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                               CommandParameter="{Binding}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Text="{Binding [L3.UndoEmpty], Source={x:Static services:Locator.L10n}}"
+                               Visibility="{Binding KillLogEmpty, Converter={StaticResource BoolToVis}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </Grid>
+            </Grid>
+        </ui:Card>
     </Grid>
 </Page>

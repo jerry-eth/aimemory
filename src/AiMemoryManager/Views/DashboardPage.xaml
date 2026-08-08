@@ -8,6 +8,11 @@
     <Page.DataContext>
         <vm:DashboardViewModel/>
     </Page.DataContext>
+    <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Page.Resources>
+    <!-- 加了清理历史卡后内容可能超出窗口高度,整体可滚动 -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="24">
         <!-- 英雄区:大圆环 + 主操作 -->
         <Grid Margin="0,12">
@@ -66,5 +71,45 @@
             <Polyline x:Name="MiniChart" Height="60" Stretch="Fill" Margin="16"
                       Stroke="{DynamicResource SystemFillColorAttentionBrush}" StrokeThickness="2"/>
         </ui:Card>
+        <!-- 清理历史卡(最新 10 条:时间/级别/释放/触发方式) -->
+        <ui:Card Margin="0,4">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding [Dash.History], Source={x:Static services:Locator.L10n}}"
+                           FontWeight="SemiBold"/>
+                <Grid Grid.Row="1" Margin="0,8,0,0">
+                    <ListView ItemsSource="{Binding HistoryRows}" MaxHeight="260"
+                              BorderThickness="0" Background="{x:Null}"
+                              Visibility="{Binding HasHistory, Converter={StaticResource BoolToVis}}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding TimeText}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding LevelText}" VerticalAlignment="Center"
+                                               Margin="0,0,16,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding FreedText}" VerticalAlignment="Center"
+                                               Margin="0,0,16,0"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding TriggerText}" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Text="{Binding [Dash.HistoryEmpty], Source={x:Static services:Locator.L10n}}"
+                               Visibility="{Binding HistoryEmpty, Converter={StaticResource BoolToVis}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </Grid>
+            </Grid>
+        </ui:Card>
     </StackPanel>
+    </ScrollViewer>
 </Page>

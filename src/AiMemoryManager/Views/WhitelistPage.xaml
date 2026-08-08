@@ -15,6 +15,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <StackPanel Orientation="Horizontal">
             <ui:Button Content="{Binding [Whitelist.Import], Source={x:Static services:Locator.L10n}}"
@@ -46,5 +47,50 @@
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
         </Grid>
+        <!-- FR-7.2 防误杀名单:名单内进程永远不会被"结束进程"终止 -->
+        <ui:Card Grid.Row="2" Margin="0,12,0,0">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="{Binding [WL.NoKillTitle], Source={x:Static services:Locator.L10n}}"
+                           FontWeight="SemiBold"/>
+                <TextBlock Grid.Row="1" Text="{Binding [WL.NoKillDesc], Source={x:Static services:Locator.L10n}}"
+                           TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
+                    <ui:TextBox Width="240" Text="{Binding NewNoKillName, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="notepad.exe"/>
+                    <ui:Button Content="{Binding [WL.NoKillAdd], Source={x:Static services:Locator.L10n}}"
+                               Command="{Binding AddNoKillCommand}" Margin="8,0,0,0"/>
+                </StackPanel>
+                <Grid Grid.Row="3" Margin="0,8,0,0">
+                    <ListView ItemsSource="{Binding NoKillItems}" MaxHeight="140"
+                              Visibility="{Binding NoKillHasItems, Converter={StaticResource BoolToVis}}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                                    <ui:Button Grid.Column="1"
+                                               Content="{Binding [Whitelist.Remove], Source={x:Static services:Locator.L10n}}"
+                                               Command="{Binding DataContext.RemoveNoKillCommand, RelativeSource={RelativeSource AncestorType=ListView}}"
+                                               CommandParameter="{Binding}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                    <TextBlock Text="{Binding [WL.NoKillEmpty], Source={x:Static services:Locator.L10n}}"
+                               Visibility="{Binding NoKillIsEmpty, Converter={StaticResource BoolToVis}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </Grid>
+            </Grid>
+        </ui:Card>
     </Grid>
 </Page>
