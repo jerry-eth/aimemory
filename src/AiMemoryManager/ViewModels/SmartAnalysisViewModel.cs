@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using AiMemoryManager.Models;
@@ -19,8 +20,13 @@ public partial class SuggestionItemViewModel : ObservableObject
     public bool CanExecute => Suggestion.Action is "compress" or "terminate";
     public bool IsCompress => Suggestion.Action == "compress";
     public bool IsTerminate => Suggestion.Action == "terminate";
-}
 
+    /// <summary>低/中风险建议默认选中，高风险结束进程必须由用户主动勾选。</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
+    public bool IsDefaultSelected => CanExecute && !string.Equals(Risk, "high", StringComparison.OrdinalIgnoreCase);
+}
 /// <summary>泄漏告警显示项:把 GrowthBytes 预格式化为 MB,时间为本地时间。</summary>
 public sealed record LeakAlertItem(string ProcessName, long GrowthMb, string TimeText);
 
@@ -44,6 +50,11 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _hasProfile;
     [ObservableProperty] private bool _hasLeakAlerts;
     [ObservableProperty] private bool _hasSuggestions;
+    [ObservableProperty] private bool _hasExecutableSuggestions;
+    [ObservableProperty] private bool _hasSelectedSuggestions;
+    [ObservableProperty] private int _selectedSuggestionCount;
+    [ObservableProperty] private string _selectionSummary = "";
+    [ObservableProperty] private bool _isBatchBusy;
     [ObservableProperty] private string _chatInput = "";
     [ObservableProperty] private bool _isChatBusy;
     [ObservableProperty] private AnalysisActionPlan? _pendingChatPlan;
@@ -66,10 +77,18 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         LastResult = r;
         Report = AnalysisReportBuilder.Build(r, Locator.Native.GetSystemMemory(), Locator.Native.GetProcessSnapshots().Count);
         HasReport = true;
+        foreach (var oldItem in Suggestions)
+            oldItem.PropertyChanged -= OnSuggestionPropertyChanged;
         Suggestions.Clear();
         foreach (var s in r.Suggestions)
-            Suggestions.Add(new SuggestionItemViewModel { Suggestion = s });
+        {
+            var item = new SuggestionItemViewModel { Suggestion = s };
+            item.IsSelected = item.IsDefaultSelected;
+            item.PropertyChanged += OnSuggestionPropertyChanged;
+            Suggestions.Add(item);
+        }
         HasSuggestions = Suggestions.Count > 0;
+        UpdateSelectionState();
         UsageText = string.Format(Locator.L10n["Analysis.Usage"], r.Usage.InputTokens, r.Usage.OutputTokens)
                   + (r.FromCache ? " " + Locator.L10n["Analysis.FromCache"] : "");
         StatusText = string.Format(Locator.L10n["Analysis.LastRun"], r.Time.ToLocalTime().ToString("HH:mm:ss"));
@@ -77,6 +96,153 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         AddChatMessage("assistant", $"{Report.Summary} {string.Join("；", Report.Recommendations)}".Trim());
     }
 
+    private void OnSuggestionPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SuggestionItemViewModel.IsSelected))
+            UpdateSelectionState();
+    }
+
+    private void UpdateSelectionState()
+    {
+        HasExecutableSuggestions = Suggestions.Any(x => x.CanExecute);
+        SelectedSuggestionCount = Suggestions.Count(x => x.CanExecute && x.IsSelected);
+        HasSelectedSuggestions = SelectedSuggestionCount > 0;
+        SelectionSummary = string.Format(Locator.L10n["Analysis.SelectedCount"], SelectedSuggestionCount, Suggestions.Count(x => x.CanExecute));
+    }
+
+    [RelayCommand]
+    private void SelectAllSuggestions()
+    {
+        foreach (var item in Suggestions.Where(x => x.CanExecute))
+            item.IsSelected = true;
+        UpdateSelectionState();
+    }
+
+    [RelayCommand]
+    private void ClearSuggestionSelection()
+    {
+        foreach (var item in Suggestions)
+            item.IsSelected = false;
+        UpdateSelectionState();
+    }
+
+    /// <summary>
+    /// 执行用户勾选的分析建议：压缩只作用于勾选的进程，结束进程仍经过统一确认和 L3 明细确认。
+    /// LLM 只提供建议，所有真正的动作都映射到现有安全服务，不执行任意命令或路径。
+    /// </summary>
+    [RelayCommand]
+    private async Task ExecuteSelectedSuggestionsAsync()
+    {
+        if (IsBatchBusy) return;
+        var selected = Suggestions.Where(x => x.CanExecute && x.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            StatusText = Locator.L10n["Analysis.BatchNoSelection"];
+            return;
+        }
+
+        try
+        {
+            var snapshots = Locator.Native.GetProcessSnapshots();
+            var compressNames = selected.Where(x => x.IsCompress)
+                .Select(x => NormalizeProcessName(x.ProcessName))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var terminateNames = selected.Where(x => x.IsTerminate)
+                .Select(x => NormalizeProcessName(x.ProcessName))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var compressTargets = snapshots
+                .Where(p => compressNames.Contains(NormalizeProcessName(p.Name)))
+                .Where(p => p.WorkingSetBytes > 20L << 20)
+                .Where(p => !Locator.Whitelist.IsExcluded(p.Name))
+                .Where(p => !Locator.Whitelist.IsSystemCritical(p.Name))
+                .Where(p => !Locator.Guard.IsProtected(p.Pid))
+                .ToList();
+            var terminateCandidates = snapshots
+                .Where(p => terminateNames.Contains(NormalizeProcessName(p.Name)))
+                .ToList();
+            var killable = Locator.Terminator.FilterCandidates(terminateCandidates.Select(p => p.Pid).ToList()).ToHashSet();
+            var terminateTargets = terminateCandidates.Where(p => killable.Contains(p.Pid)).ToList();
+
+            if (compressTargets.Count == 0 && terminateTargets.Count == 0)
+            {
+                StatusText = Locator.L10n["Analysis.BatchNoTargets"];
+                AddChatMessage("assistant", Locator.L10n["Analysis.BatchNoTargets"]);
+                return;
+            }
+
+            var summary = string.Format(Locator.L10n["Analysis.BatchConfirm"],
+                compressTargets.Count, terminateTargets.Count);
+            var confirm = new SlimConfirmDialog(
+                Locator.L10n["Analysis.BatchTitle"], summary, Locator.L10n["Analysis.BatchExecute"])
+            { Owner = System.Windows.Application.Current.MainWindow };
+            if (confirm.ShowDialog() != true) return;
+
+            IReadOnlyCollection<int> confirmedPids = Array.Empty<int>();
+            if (terminateTargets.Count > 0)
+            {
+                var rows = terminateTargets.Select(t => new TerminateConfirmItem(
+                    t.Pid, t.Name, t.Path, t.WorkingSetBytes,
+                    Locator.Unsaved.HasUnsavedSigns(t.Pid))).ToList();
+                var terminateDialog = new TerminateConfirmDialog(rows)
+                { Owner = System.Windows.Application.Current.MainWindow };
+                if (terminateDialog.ShowDialog() != true) return;
+                confirmedPids = terminateDialog.SelectedPids;
+            }
+
+            IsBatchBusy = true;
+            StatusText = Locator.L10n["Analysis.BatchProcessing"];
+            CleanResult? compressed = null;
+            TerminateResult? terminated = null;
+            if (compressTargets.Count > 0)
+                compressed = await Locator.Clean.RunL1Async(CleanTrigger.Analysis,
+                    compressTargets.Select(p => p.Pid).ToList());
+            if (confirmedPids.Count > 0)
+                terminated = await Locator.Terminator.TerminateAsync(confirmedPids);
+
+            var compressedCount = compressed?.ProcessCount ?? 0;
+            var terminatedOk = terminated?.Items.Count(x => x.Success) ?? 0;
+            var terminatedFailed = terminated?.Items.Count(x => !x.Success) ?? 0;
+            var freedBytes = (compressed?.FreedBytes ?? 0) + (terminated?.FreedBytes ?? 0);
+            if (terminatedOk > 0)
+                Locator.History.Record(new CleanHistoryEntry(DateTimeOffset.Now, CleanLevel.L3,
+                    terminated!.FreedBytes, terminatedOk, CleanTrigger.Analysis));
+
+            var resultText = string.Format(Locator.L10n["Analysis.BatchExecuted"],
+                freedBytes / (1 << 20), compressedCount, terminatedOk, terminatedFailed);
+            StatusText = resultText;
+            AddChatMessage("assistant", resultText);
+
+            var terminatedNames = terminated?.Items.Where(x => x.Success)
+                .Select(x => NormalizeProcessName(x.Name))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in selected.ToList())
+            {
+                var handled = item.IsCompress
+                    ? compressTargets.Any(p => string.Equals(NormalizeProcessName(p.Name), NormalizeProcessName(item.ProcessName), StringComparison.OrdinalIgnoreCase))
+                    : terminatedNames.Contains(NormalizeProcessName(item.ProcessName));
+                if (handled)
+                {
+                    item.PropertyChanged -= OnSuggestionPropertyChanged;
+                    Suggestions.Remove(item);
+                }
+            }
+            HasSuggestions = Suggestions.Count > 0;
+            UpdateSelectionState();
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            AddChatMessage("assistant", string.Format(Locator.L10n["Analysis.BatchFailed"], ex.Message));
+        }
+        finally { IsBatchBusy = false; }
+    }
+
+    private static string NormalizeProcessName(string name)
+    {
+        var value = name.Trim();
+        return value.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? value[..^4] : value;
+    }
     /// <summary>手动触发前置检查:档案存在 + 未达月度预算(超预算手动分析被拦并给出可见提示)。</summary>
     private bool PrecheckManual()
     {
@@ -209,18 +375,36 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task CompressAsync(SuggestionItemViewModel? item)
     {
-        // M2 决策:不新增单进程压缩 API(YAGNI),"立即压缩"执行全量 L1(语义=压缩所有非豁免进程)
+        if (item is null) return;
         try
         {
-            var r = await Locator.Clean.RunL1Async(CleanTrigger.Manual);
-            StatusText = string.Format(Locator.L10n["Analysis.Compressed"], r.FreedBytes / (1 << 20));
+            var targets = Locator.Native.GetProcessSnapshots()
+                .Where(p => string.Equals(NormalizeProcessName(p.Name), NormalizeProcessName(item.ProcessName), StringComparison.OrdinalIgnoreCase))
+                .Where(p => p.WorkingSetBytes > 20L << 20)
+                .Where(p => !Locator.Whitelist.IsExcluded(p.Name))
+                .Where(p => !Locator.Whitelist.IsSystemCritical(p.Name))
+                .Where(p => !Locator.Guard.IsProtected(p.Pid))
+                .Select(p => p.Pid)
+                .ToList();
+            if (targets.Count == 0)
+            {
+                StatusText = Locator.L10n["Analysis.BatchNoTargets"];
+                return;
+            }
+            var r = await Locator.Clean.RunL1Async(CleanTrigger.Analysis, targets);
+            var resultText = string.Format(Locator.L10n["Analysis.Compressed"], r.FreedBytes / (1 << 20));
+            StatusText = resultText;
+            AddChatMessage("assistant", $"{item.ProcessName}：{resultText}");
+            item.PropertyChanged -= OnSuggestionPropertyChanged;
+            Suggestions.Remove(item);
+            HasSuggestions = Suggestions.Count > 0;
+            UpdateSelectionState();
         }
         catch (Exception ex)
         {
             StatusText = string.Format(Locator.L10n["Dashboard.L1Failed"], ex.Message);
         }
     }
-
     /// <summary>
     /// terminate 建议一键执行:与进程页 L3 同一强制确认流(FilterCandidates → 确认对话框 → TerminateAsync)。
     /// 同名多实例:按进程名从全新快照解析 pid,所有匹配实例一起进清单;历史以 CleanTrigger.Analysis 记一次。
@@ -234,7 +418,7 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         {
             var snaps = Locator.Native.GetProcessSnapshots();
             var sameName = snaps
-                .Where(p => string.Equals(p.Name, item.ProcessName, StringComparison.OrdinalIgnoreCase))
+                .Where(p => string.Equals(NormalizeProcessName(p.Name), NormalizeProcessName(item.ProcessName), StringComparison.OrdinalIgnoreCase))
                 .ToList();
             var killable = Locator.Terminator
                 .FilterCandidates(sameName.Select(p => p.Pid).ToList()).ToHashSet();
@@ -263,8 +447,10 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
                     DateTimeOffset.Now, CleanLevel.L3, r.FreedBytes, ok, CleanTrigger.Analysis));
             StatusText = string.Format(Locator.L10n["L3.Result"], ok, r.FreedBytes / (1 << 20), fail);
             // 该卡标记已处理:从建议列表移除
+            item.PropertyChanged -= OnSuggestionPropertyChanged;
             Suggestions.Remove(item);
             HasSuggestions = Suggestions.Count > 0;
+            UpdateSelectionState();
         }
         catch (Exception ex)
         {
@@ -283,7 +469,3 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
 
     public void Dispose() => Locator.Analysis.AnalysisCompleted -= OnAnalysisCompleted;
 }
-
-
-
-

@@ -101,6 +101,16 @@ public class CleanServiceTests
         Assert.Equal(CleanTrigger.Manual, r.Trigger);
     }
 
+    [Fact]
+    public async Task L1_指定进程只清理勾选目标并继续应用保护规则()
+    {
+        var (svc, native, _) = Create();
+        native.ForegroundPid = -1;
+        var r = await svc.RunL1Async(CleanTrigger.Analysis, new[] { 1, 2, 3 });
+        Assert.Equal(new[] { 1 }, native.EmptiedPids);
+        Assert.Equal(100L << 20, r.FreedBytes);
+        Assert.Equal(1, r.ProcessCount);
+    }
     [Fact] public async Task L2_调用提权执行器并回报释放量()
     {
         var (svc, _, l2) = Create();

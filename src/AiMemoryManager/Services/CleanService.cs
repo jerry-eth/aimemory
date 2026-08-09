@@ -16,9 +16,19 @@ public class CleanService
         => (_native, _whitelist, _l2, _guard) = (native, whitelist, l2, guard);
 
     public Task<CleanResult> RunL1Async(CleanTrigger trigger, CancellationToken ct = default)
+        => RunL1Async(trigger, processIds: null, ct);
+
+    /// <summary>
+    /// 仅压缩指定进程的工作集。进程列表来自界面当前快照，执行前再次应用白名单、系统关键进程、前台保护和最小工作集规则。
+    /// 这样智能分析可以只处理用户勾选的建议，而不会把“压缩”扩大成全量清理。
+    /// </summary>
+    public Task<CleanResult> RunL1Async(CleanTrigger trigger, IReadOnlyCollection<int>? processIds,
+        CancellationToken ct = default)
         => Task.Run(() =>
         {
+            var requested = processIds is null ? null : processIds.ToHashSet();
             var targets = _native.GetProcessSnapshots()
+                .Where(p => requested is null || requested.Contains(p.Pid))
                 .Where(p => p.WorkingSetBytes > 20L << 20)           // 跳过极小进程
                 .Where(p => !_whitelist.IsExcluded(p.Name))
                 .Where(p => !_whitelist.IsSystemCritical(p.Name))
