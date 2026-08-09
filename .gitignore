@@ -5,3 +5,8 @@ bin/
 obj/
 *.user
 .vs/
+
+artifacts/
+.claude/
+*.pfx
+*.cer

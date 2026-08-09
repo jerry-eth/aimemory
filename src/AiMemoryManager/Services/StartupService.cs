@@ -1,14 +1,17 @@
 using System.Diagnostics;
 using Microsoft.Win32;
+using Windows.ApplicationModel;
+using Windows.ApplicationModel.Core;
 
 namespace AiMemoryManager.Services;
 
 /// <summary>
-/// FR-8.3 开机自启:HKCU Run 键读写(默认实现),测试注入委托避免真实注册表访问。
-/// MSIX 打包态的 StartupTask 声明留待 M4,本机制面向未打包(注册表)场景。
+/// FR-8.3 开机自启：MSIX 打包态使用 StartupTask，未打包运行时回退到 HKCU Run。
+/// StartupTask 的启用/禁用状态由系统管理；请求启用失败时不会静默写入错误路径。
 /// </summary>
 public class StartupService
 {
+    public const string StartupTaskId = "AiMemoryManagerStartup";
     private const string RunKeyName = "AiMemoryManager";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -24,17 +27,89 @@ public class StartupService
         _getRunKey = getRunKey ?? DefaultGet;
     }
 
-    public bool IsEnabled => _getRunKey(RunKeyName) != null;
+    /// <summary>当前进程是否运行在 MSIX 包身份下。</summary>
+    public static bool IsPackaged
+    {
+        get
+        {
+            try
+            {
+                _ = Package.Current.Id;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    public bool IsEnabled
+    {
+        get
+        {
+            if (IsPackaged && TryGetPackagedState(out var state))
+                return state == StartupTaskState.Enabled;
+            return _getRunKey(RunKeyName) != null;
+        }
+    }
 
     public void SetEnabled(bool enabled)
     {
         try
         {
+            if (IsPackaged && TrySetPackagedEnabled(enabled))
+            {
+                _settings.Current.AutoStartEnabled = enabled;
+                _settings.Save();
+                return;
+            }
+
             _setRunKey(RunKeyName, enabled ? $"\"{Environment.ProcessPath}\"" : null);
             _settings.Current.AutoStartEnabled = enabled;
             _settings.Save();
         }
-        catch (Exception ex) { Debug.WriteLine("StartupService: " + ex); }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("StartupService: " + ex);
+        }
+    }
+
+    private static bool TryGetPackagedState(out StartupTaskState state)
+    {
+        state = StartupTaskState.Disabled;
+        try
+        {
+            var task = StartupTask.GetAsync(StartupTaskId).AsTask().GetAwaiter().GetResult();
+            state = task.State;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("StartupTask read failed: " + ex.Message);
+            return false;
+        }
+    }
+
+    private static bool TrySetPackagedEnabled(bool enabled)
+    {
+        try
+        {
+            var task = StartupTask.GetAsync(StartupTaskId).AsTask().GetAwaiter().GetResult();
+            if (enabled)
+            {
+                var state = task.RequestEnableAsync().AsTask().GetAwaiter().GetResult();
+                return state == StartupTaskState.Enabled;
+            }
+
+            task.Disable();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine("StartupTask write failed: " + ex.Message);
+            return false;
+        }
     }
 
     private static void DefaultSet(string name, string? value)

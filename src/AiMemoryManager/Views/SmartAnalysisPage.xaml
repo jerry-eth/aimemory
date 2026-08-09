@@ -9,11 +9,11 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
     </Page.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
-        <StackPanel Margin="24">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch" CanContentScroll="False" PanningMode="VerticalFirst">
+        <StackPanel Margin="24" HorizontalAlignment="Stretch">
             <!-- 顶部操作条:开始分析 + 状态 + Token 用量(AsyncRelayCommand 执行中自动禁用按钮) -->
             <ui:Card Margin="0,4">
-                <StackPanel Margin="16" Orientation="Horizontal">
+                <WrapPanel Margin="16" Orientation="Horizontal">
                     <ui:Button Content="{Binding [Analysis.Run], Source={x:Static services:Locator.L10n}}"
                                Appearance="Primary" Command="{Binding RunAnalysisCommand}"
                                Width="160" Height="40"/>
@@ -27,7 +27,7 @@
                         <TextBlock Text="{Binding UsageText}"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
-                </StackPanel>
+                </WrapPanel>
             </ui:Card>            <!-- 统一的大模型对话区：报告、历史消息和执行确认都在当前页面内 -->
             <ui:Card Margin="0,4" Visibility="{Binding HasReport, Converter={StaticResource BoolToVis}}">
                 <StackPanel Margin="16">
@@ -48,7 +48,7 @@
                             <ItemsControl ItemsSource="{Binding Report.Recommendations}" Margin="0,6,0,0"/>
                         </StackPanel>
                     </ui:Card>
-                    <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalContentAlignment="Stretch">
                         <ItemsControl ItemsSource="{Binding ChatMessages}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -76,7 +76,7 @@
                             BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
                             Visibility="{Binding HasPendingChatPlan, Converter={StaticResource BoolToVis}}">
                         <Grid>
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="{Binding [Analysis.ChatPlan], Source={x:Static services:Locator.L10n}}" FontWeight="SemiBold"/>
                                 <TextBlock Text="{Binding ChatPlanText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
@@ -84,17 +84,17 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
                             </StackPanel>
                             <ui:Button Grid.Column="1" Content="{Binding [Analysis.ChatExecute], Source={x:Static services:Locator.L10n}}"
-                                       Command="{Binding ExecuteChatPlanCommand}" Appearance="Primary" MinWidth="110"
+                                       Command="{Binding ExecuteChatPlanCommand}" Appearance="Primary" MinWidth="96" Padding="8,4"
                                        VerticalAlignment="Center" Margin="12,0,0,0"/>
                         </Grid>
                     </Border>
                     <Grid Margin="0,4,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBox Text="{Binding ChatInput, UpdateSourceTrigger=PropertyChanged}" MinHeight="42"
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="0"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding ChatInput, UpdateSourceTrigger=PropertyChanged}" MinHeight="42" MinWidth="0"
                                  AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                                  ToolTip="{Binding [Analysis.ChatPlaceholder], Source={x:Static services:Locator.L10n}}"/>
                         <ui:Button Grid.Column="1" Content="{Binding [Analysis.ChatSend], Source={x:Static services:Locator.L10n}}"
-                                   Command="{Binding SendChatCommand}" Appearance="Primary" MinWidth="90" Margin="8,0,0,0"/>
+                                   Command="{Binding SendChatCommand}" Appearance="Primary" MinWidth="82" Padding="8,4" Margin="8,0,0,0"/>
                     </Grid>
                 </StackPanel>
             </ui:Card>            <!-- 无档案引导卡 -->
@@ -200,4 +200,3 @@
         </StackPanel>
     </ScrollViewer>
 </Page>
-

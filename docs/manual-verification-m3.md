@@ -1,6 +1,6 @@
 # M3 人工验证清单
 
-自动化已覆盖:解决方案构建(0 警告 0 错误)、156 个测试(154 通过 + 2 个真实 LLM 端点集成测试,需设置 `AMM_TEST_LLM_KEY` 环境变量后才会运行)、Debug 启动 15 秒无异常冒烟、`git grep -E "sk-[A-Za-z0-9]{20,}"` 密钥扫描零命中、i18n 键对齐(zh-CN / en 各 192 键,无缺失)。
+自动化已覆盖:解决方案构建(0 警告 0 错误)、163 个测试(161 通过 + 2 个真实 LLM 端点集成测试,需设置 `AMM_TEST_LLM_KEY` 环境变量后才会运行)、Release 构建 0 警告 0 错误；Debug 启动 15 秒无异常冒烟、`git grep -E "sk-[A-Za-z0-9]{20,}"` 密钥扫描零命中、i18n 键对齐(zh-CN / en 各 192 键,无缺失)。
 以下项涉及真实桌面交互 / 真实大模型服务 / 注册表 / 回收站与 Junction,无法无头验证,请人工走查。
 
 ## 1. L3 进程终止确认流(重点)
@@ -23,10 +23,10 @@
 - [ ] 占用降级:先用其它程序注册占住该组合键(或改成一个已被系统占用的组合)→ 应用不崩溃,静默降级(仅不注册热键),界面/日志有体现
 
 ## 5. 开机自启
-- [ ] 设置页打开「开机自启」→ 注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下出现 `AiMemoryManager` 值(可用 `regedit` 或 `reg query` 核对)
-- [ ] (可选)重启资源管理器或注销重登 → 应用随系统启动
-- [ ] 关闭开关 → 该注册表值消失
-- 注意:必须用编译产物的 exe(`dotnet build` / `dotnet publish` 输出)验证自启,不能用 `dotnet run` —— 后者 `Environment.ProcessPath` 指向 `dotnet.exe`,写入注册表的会是错误的启动路径。
+- [ ] 未打包 Debug/发布目录运行时：设置页打开「开机自启」→ 注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下出现 `AiMemoryManager` 值。
+- [ ] MSIX 打包运行时：设置页打开「开机自启」→ `StartupTask` 状态变为 Enabled，关闭后变为 Disabled（不写入旧 Run 键）。
+- [ ] (可选)重启资源管理器或注销重登 → 应用随系统启动。
+- 注意：必须用编译产物的 exe 或已安装 MSIX 验证自启，不能用 `dotnet run` —— 后者 `Environment.ProcessPath` 指向 `dotnet.exe`。
 
 ## 6. 通知开关
 - [ ] 关闭「清理完成通知」→ 执行一次清理 → **不弹**系统通知
