@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$OutputPath = (Join-Path (Get-Location) 'artifacts\certs\AiMemoryManager-Test.pfx'),
     [string]$CertificateSubject = 'CN=AiMemoryManager',
