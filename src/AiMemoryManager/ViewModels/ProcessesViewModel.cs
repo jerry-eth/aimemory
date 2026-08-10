@@ -136,10 +136,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
             var rows = await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
-<<<<<<< HEAD
-=======
                 // 与 Windows 任务管理器一致显示全部当前进程,包含小工作集和后台进程。
->>>>>>> 96528f8 (优化进程实时刷新并降低列表卡顿)
                 var snaps = Locator.Native.GetProcessSnapshots()
                     .OrderByDescending(p => p.WorkingSetBytes)
                     .ToList();
