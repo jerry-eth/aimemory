@@ -65,7 +65,10 @@ public class StartupService
                 return;
             }
 
-            _setRunKey(RunKeyName, enabled ? $"\"{Environment.ProcessPath}\"" : null);
+            var processPath = Environment.ProcessPath;
+            if (enabled && string.IsNullOrWhiteSpace(processPath))
+                throw new InvalidOperationException("无法确定当前程序路径，不能配置开机自启。");
+            _setRunKey(RunKeyName, enabled ? $"\"{processPath}\"" : null);
             _settings.Current.AutoStartEnabled = enabled;
             _settings.Save();
         }
@@ -114,9 +117,10 @@ public class StartupService
 
     private static void DefaultSet(string name, string? value)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
-        if (value == null) key?.DeleteValue(name, throwOnMissingValue: false);
-        else key?.SetValue(name, value);
+        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
+        if (key is null) throw new InvalidOperationException("无法打开当前用户的开机自启注册表项。");
+        if (value == null) key.DeleteValue(name, throwOnMissingValue: false);
+        else key.SetValue(name, value, RegistryValueKind.String);
     }
 
     private static string? DefaultGet(string name)

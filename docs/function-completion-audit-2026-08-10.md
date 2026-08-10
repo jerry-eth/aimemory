@@ -7,7 +7,7 @@
 1. M4 正式上架流程仍需要真实 Partner Center 身份、正式签名、干净设备安装升级验证、商店素材和真实隐私政策信息。
 2. 自包含 MSIX 当前约 77.1 MB，高于规格 NFR-1 的 ≤40 MB 目标。
 3. 无障碍（FR-10.10）尚未完成系统化的 AutomationProperties、焦点顺序、对比度和辅助技术验收。
-4. 字体（FR-10.8）尚未在全局资源中明确声明 Segoe UI Variable / Segoe Fluent Icons。
+4. 字体（FR-10.8）此前未显式统一；本轮已在全局资源声明并应用 Segoe UI Variable / Segoe Fluent Icons（仍需在目标系统人工确认字体回退效果）。
 5. 大量桌面交互仍需人工验证，尤其是 UAC、StartupTask、全局热键、托盘、L3 恢复、真实 LLM/Ollama、C 盘迁移回退和长时间运行稳定性。
 
 ## 本次审计与补齐
@@ -54,7 +54,7 @@
 ### 尚未完全满足规格
 
 - **NFR-1**：安装包体积仍超出 40 MB 目标。
-- **FR-10.8**：字体族未显式统一到规格要求的字体。
+- **FR-10.8**：代码层已补齐全局字体资源与窗口继承；仍需人工确认 Windows 10 旧版字体回退和视觉效果。
 - **FR-10.10**：无障碍属性、焦点顺序、对比度和辅助技术验收未完成。
 - **FR-10.9**：圆环动效已完成，卡片淡入动效尚未系统化覆盖全部页面。
 - **M4**：正式商店发布链路未完成。
@@ -73,3 +73,12 @@
 - Partner Center 年龄分级、隐私政策和商店素材。
 
 因此当前可以称为：**核心功能开发完成、可构建和可测试，但还不是“所有功能完全完成/正式上架完成”。**
+## 2026-08-10 追加复核与修复
+
+- `SettingsService` 增加旧版本/手工编辑配置的规范化：空集合自动恢复，语言、阈值、定时、泄漏检测和热键参数限制在有效范围；新增回归测试。
+- `StartupService` 的未打包自启动回退改为自动创建 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 子键，并在无法确定程序路径时拒绝写入，避免“设置已打开但实际未自启动”。
+- 全局窗口应用 `Segoe UI Variable, Segoe UI`，并声明 `Segoe Fluent Icons, Segoe MDL2 Assets` 资源；主窗口增加 UI Automation 名称。
+- 复核结果：Release 构建 0 警告/0 错误；自动化测试 **169 通过、2 跳过、0 失败，共 171**；两项跳过仍仅因为未配置 `AMM_TEST_LLM_KEY`，未向仓库或 GitHub 写入任何密钥。
+- 重新验证 framework-dependent MSIX 约 **10.3 MB**；自包含 MSIX 约 **77.1 MB**。尝试 `PublishTrimmed=true` 时 .NET 8 SDK 返回 `NETSDK1168`（WPF 不支持剪裁），所以 NFR-1 仍未达标，不能把自包含包宣称为 ≤40 MB。
+
+本轮后仍未完成的事项主要是：真实 LLM/Ollama、UAC/StartupTask/托盘/热键/回收站/Junction/长时间稳定性人工验收；FR-10.10 的系统化辅助技术验收；FR-10.9 全页面卡片淡入策略；以及正式 Partner Center 发布、正式证书、隐私政策和商店素材。
