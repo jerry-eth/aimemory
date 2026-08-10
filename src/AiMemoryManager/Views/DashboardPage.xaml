@@ -4,7 +4,9 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:c="clr-namespace:AiMemoryManager.Controls"
     xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
-    xmlns:services="clr-namespace:AiMemoryManager.Services">
+    xmlns:services="clr-namespace:AiMemoryManager.Services"
+      Title="{Binding [Nav.Dashboard], Source={x:Static services:Locator.L10n}}"
+      AutomationProperties.Name="{Binding RelativeSource={RelativeSource Self}, Path=Title}">
     <Page.DataContext>
         <vm:DashboardViewModel/>
     </Page.DataContext>

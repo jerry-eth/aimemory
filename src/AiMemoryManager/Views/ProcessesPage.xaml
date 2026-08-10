@@ -4,7 +4,8 @@
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:vm="clr-namespace:AiMemoryManager.ViewModels"
       xmlns:services="clr-namespace:AiMemoryManager.Services"
-      Title="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}">
+      Title="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}"
+      AutomationProperties.Name="{Binding RelativeSource={RelativeSource Self}, Path=Title}">
     <Page.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </Page.Resources>

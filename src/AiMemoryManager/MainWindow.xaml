@@ -19,6 +19,7 @@
         <!-- 自定义标题栏:启用常规最小化/最大化(还原)/关闭按钮。 -->
         <ui:TitleBar Grid.Row="0"
                      Title="{Binding [App.Title], Source={x:Static services:Locator.L10n}}"
+                     AutomationProperties.Name="{Binding [App.Title], Source={x:Static services:Locator.L10n}}"
                      ShowMinimize="True" ShowMaximize="True" ShowClose="True"
                      CanMaximize="True"/>
         <Grid Grid.Row="1">
@@ -35,33 +36,42 @@
         <ui:NavigationView x:Name="RootNavigation" IsBackButtonVisible="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="{Binding [Nav.Dashboard], Source={x:Static services:Locator.L10n}}"
-                                       Tag="dashboard" TargetPageType="{x:Type views:DashboardPage}"
+                                       Tag="dashboard"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:DashboardPage}"
                                        Icon="{ui:SymbolIcon Home24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.Processes], Source={x:Static services:Locator.L10n}}"
-                                       Tag="processes" TargetPageType="{x:Type views:ProcessesPage}"
+                                       Tag="processes"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:ProcessesPage}"
                                        Icon="{ui:SymbolIcon AppsList24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.Rules], Source={x:Static services:Locator.L10n}}"
-                                       Tag="rules" TargetPageType="{x:Type views:RulesPage}"
+                                       Tag="rules"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:RulesPage}"
                                        Icon="{ui:SymbolIcon Timer24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.Analysis], Source={x:Static services:Locator.L10n}}"
-                                       Tag="analysis" TargetPageType="{x:Type views:SmartAnalysisPage}"
+                                       Tag="analysis"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:SmartAnalysisPage}"
                                        Icon="{ui:SymbolIcon Sparkle24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.Llm], Source={x:Static services:Locator.L10n}}"
-                                       Tag="llm" TargetPageType="{x:Type views:LlmSettingsPage}"
+                                       Tag="llm"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:LlmSettingsPage}"
                                        Icon="{ui:SymbolIcon Bot24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.CSlim], Source={x:Static services:Locator.L10n}}"
-                                       Tag="cslim" TargetPageType="{x:Type views:CSlimPage}"
+                                       Tag="cslim"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:CSlimPage}"
                                        Icon="{ui:SymbolIcon HardDrive24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.TokenStats], Source={x:Static services:Locator.L10n}}"
-                                       Tag="tokens" TargetPageType="{x:Type views:TokenStatsPage}"
+                                       Tag="tokens"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:TokenStatsPage}"
                                        Icon="{ui:SymbolIcon DataUsage24}"/>
                 <ui:NavigationViewItem Content="{Binding [Nav.Whitelist], Source={x:Static services:Locator.L10n}}"
-                                       Tag="whitelist" TargetPageType="{x:Type views:WhitelistPage}"
+                                       Tag="whitelist"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:WhitelistPage}"
                                        Icon="{ui:SymbolIcon ShieldCheckmark24}"/>
             </ui:NavigationView.MenuItems>
             <ui:NavigationView.FooterMenuItems>
                 <ui:NavigationViewItem Content="{Binding [Nav.Settings], Source={x:Static services:Locator.L10n}}"
-                                       Tag="settings" TargetPageType="{x:Type views:SettingsPage}"
+                                       Tag="settings"
+                                       AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" TargetPageType="{x:Type views:SettingsPage}"
                                        Icon="{ui:SymbolIcon Settings24}"/>
             </ui:NavigationView.FooterMenuItems>
         </ui:NavigationView>
