@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,6 +8,37 @@ using AiMemoryManager.Services;
 using AiMemoryManager.Views;
 
 namespace AiMemoryManager.ViewModels;
+
+/// <summary>批量加入进程行，避免首次加载时为每一行触发布局和虚拟化重建。</summary>
+public sealed class ProcessItemCollection : ObservableCollection<ProcessItemViewModel>
+{
+    private bool _suppressNotifications;
+
+    public void AddRange(IEnumerable<ProcessItemViewModel> items)
+    {
+        CheckReentrancy();
+        _suppressNotifications = true;
+        try
+        {
+            foreach (var item in items)
+                Items.Add(item);
+        }
+        finally
+        {
+            _suppressNotifications = false;
+        }
+
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
+
+    protected override void OnCollectionChanged(NotifyCollectionChangedEventArgs e)
+    {
+        if (!_suppressNotifications)
+            base.OnCollectionChanged(e);
+    }
+}
 
 /// <summary>进程列表行:包装快照,附加白名单/系统关键/可终止状态。</summary>
 public partial class ProcessItemViewModel : ObservableObject
@@ -42,16 +74,17 @@ public partial class ProcessItemViewModel : ObservableObject
 
     public void UpdateSnapshot(ProcessSnapshot snapshot, double cpuPercent)
     {
+        var previous = Snapshot;
+        var previousCpuText = CpuText;
         Snapshot = snapshot;
         CpuPercent = cpuPercent;
-        OnPropertyChanged(nameof(Pid));
-        OnPropertyChanged(nameof(Name));
-        OnPropertyChanged(nameof(MemoryText));
-        OnPropertyChanged(nameof(Path));
-        OnPropertyChanged(nameof(CpuPercent));
-        OnPropertyChanged(nameof(CpuText));
-        OnPropertyChanged(nameof(StatusText));
-        OnPropertyChanged(nameof(SignatureText));
+        if (previous.Pid != snapshot.Pid) OnPropertyChanged(nameof(Pid));
+        if (!string.Equals(previous.Name, snapshot.Name, StringComparison.Ordinal)) OnPropertyChanged(nameof(Name));
+        if (previous.WorkingSetBytes != snapshot.WorkingSetBytes) OnPropertyChanged(nameof(MemoryText));
+        if (!string.Equals(previous.Path, snapshot.Path, StringComparison.OrdinalIgnoreCase)) OnPropertyChanged(nameof(Path));
+        if (!string.Equals(previousCpuText, CpuText, StringComparison.Ordinal)) OnPropertyChanged(nameof(CpuText));
+        if (previous.HasVisibleWindow != snapshot.HasVisibleWindow) OnPropertyChanged(nameof(StatusText));
+        if (previous.SignatureStatus != snapshot.SignatureStatus) OnPropertyChanged(nameof(SignatureText));
     }
 }
 
@@ -63,7 +96,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
     private Task? _monitorTask;
     private Dictionary<int, ProcessSample> _previousSamples = new();
 
-    public ObservableCollection<ProcessItemViewModel> Items { get; } = new();
+    public ProcessItemCollection Items { get; } = new();
 
     /// <summary>FR-2.7 后悔药:最近被本应用结束的进程(新的在前)。</summary>
     public ObservableCollection<KillRecord> KillLogRecords { get; } = new();
@@ -87,24 +120,26 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
     /// <summary>开始后台轮询。页面导航回来时可重复调用,不会启动多个轮询任务。</summary>
     public void StartMonitoring()
     {
-        if (_monitorTask is { IsCompleted: false }) return;
-        _monitorCts?.Dispose();
-        _monitorCts = new CancellationTokenSource();
+        if (IsMonitoring && _monitorTask is { IsCompleted: false }) return;
+        var monitorCts = new CancellationTokenSource();
+        _monitorCts = monitorCts;
         IsMonitoring = true;
-        _monitorTask = MonitorLoopAsync(_monitorCts.Token);
+        _monitorTask = MonitorLoopAsync(monitorCts);
     }
 
     /// <summary>页面离开时停止轮询,避免隐藏页面继续占用进程枚举和 CPU。</summary>
     public void StopMonitoring()
     {
-        _monitorCts?.Cancel();
+        var monitorCts = _monitorCts;
         _monitorCts = null;
+        monitorCts?.Cancel();
         IsMonitoring = false;
         OnPropertyChanged(nameof(LiveSummaryText));
     }
 
-    private async Task MonitorLoopAsync(CancellationToken cancellationToken)
+    private async Task MonitorLoopAsync(CancellationTokenSource monitorCts)
     {
+        var cancellationToken = monitorCts.Token;
         try
         {
             await RefreshCoreAsync(cancellationToken);
@@ -122,15 +157,20 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            if (cancellationToken == _monitorCts?.Token)
+            if (ReferenceEquals(monitorCts, _monitorCts))
                 IsMonitoring = false;
+            monitorCts.Dispose();
             OnPropertyChanged(nameof(LiveSummaryText));
         }
     }
 
     /// <summary>手动刷新仍可用,但与实时轮询共享门闩,不会并发枚举进程。</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
     private Task RefreshAsync() => RefreshCoreAsync(CancellationToken.None);
+
+    private bool CanRefresh() => !IsRefreshing;
+
+    partial void OnIsRefreshingChanged(bool value) => RefreshCommand.NotifyCanExecuteChanged();
 
     private async Task RefreshCoreAsync(CancellationToken cancellationToken)
     {
@@ -190,10 +230,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         }
 
         if (existing.Count == 0)
-        {
-            foreach (var row in rows)
-                AddItem(row, now);
-        }
+            Items.AddRange(rows.Select(row => CreateItem(row, now)));
         else
         {
             foreach (var row in rows)
@@ -208,7 +245,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
                 }
                 else
                 {
-                    AddItem(row, now);
+                    Items.Add(CreateItem(row, now));
                 }
             }
         }
@@ -220,7 +257,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(LiveSummaryText));
     }
 
-    private void AddItem(ProcessRowData row, DateTimeOffset now)
+    private ProcessItemViewModel CreateItem(ProcessRowData row, DateTimeOffset now)
     {
         var item = new ProcessItemViewModel
         {
@@ -231,7 +268,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         };
         item.UpdateSnapshot(row.Snapshot, CalculateCpuPercent(row.Snapshot, now));
         item.PropertyChanged += OnItemPropertyChanged;
-        Items.Add(item);
+        return item;
     }
 
     private double CalculateCpuPercent(ProcessSnapshot current, DateTimeOffset now)

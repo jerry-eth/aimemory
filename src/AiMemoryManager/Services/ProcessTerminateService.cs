@@ -47,7 +47,18 @@ public class ProcessTerminateService
     /// <summary>黑名单/对话计划使用的自动路径：白名单只代表清理排除，不覆盖用户明确的黑名单动作。</summary>
     public IReadOnlyList<int> FilterAutomaticCandidates(IReadOnlyCollection<int> pids)
     {
-        var names = _native.GetProcessSnapshots().ToDictionary(p => p.Pid, p => p.Name);
+        return FilterAutomaticCandidates(_native.GetProcessSnapshots(), pids);
+    }
+
+    /// <summary>
+    /// Uses a caller-provided fresh snapshot so the execution path can recheck
+    /// safety without enumerating every process twice.
+    /// </summary>
+    public IReadOnlyList<int> FilterAutomaticCandidates(
+        IReadOnlyCollection<ProcessSnapshot> snapshots,
+        IReadOnlyCollection<int> pids)
+    {
+        var names = snapshots.ToDictionary(p => p.Pid, p => p.Name);
         return pids.Where(pid =>
         {
             if (!names.TryGetValue(pid, out var name)) return false;
@@ -60,21 +71,24 @@ public class ProcessTerminateService
     }
 
     public Task<TerminateResult> TerminateAsync(IReadOnlyCollection<int> pids)
-        => TerminateCoreAsync(pids, FilterCandidates, "Manual");
+        => TerminateCoreAsync(pids, automatic: false, "Manual");
 
     public Task<TerminateResult> TerminateAutomaticAsync(IReadOnlyCollection<int> pids, string source = "Blacklist")
-        => TerminateCoreAsync(pids, FilterAutomaticCandidates, source);
+        => TerminateCoreAsync(pids, automatic: true, source);
 
     private Task<TerminateResult> TerminateCoreAsync(
         IReadOnlyCollection<int> pids,
-        Func<IReadOnlyCollection<int>, IReadOnlyList<int>> filter,
+        bool automatic,
         string source)
         => Task.Run(() =>
         {
             var snaps = _native.GetProcessSnapshots().ToDictionary(p => p.Pid);
+            var allowed = automatic
+                ? FilterAutomaticCandidates(snaps.Values.ToList(), pids)
+                : FilterCandidates(snaps.Values.ToList(), pids);
             var items = new List<TerminateItemResult>();
             long freed = 0;
-            foreach (var pid in filter(pids))
+            foreach (var pid in allowed)
             {
                 if (!snaps.TryGetValue(pid, out var snap)) continue;
                 bool ok = _native.TryTerminateProcess(pid, out int err);

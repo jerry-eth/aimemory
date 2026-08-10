@@ -87,6 +87,11 @@ public partial class MainWindow : FluentWindow
 
         while (current is not null)
         {
+            // DataGrid 自己的 ScrollViewer 支持像素级虚拟化和原生滚动。
+            // 不在窗口级拦截它，否则每个滚轮刻度都会被强制跳 48px，导致列表滚动发涩。
+            if (current is System.Windows.Controls.DataGrid)
+                return;
+
             if (current is ScrollViewer viewer && TryScroll(viewer, scrollAmount))
             {
                 e.Handled = true;
