@@ -7,6 +7,7 @@
   "Dashboard.CleanL2": "Deep Clean (admin)", "Dashboard.LastClean": "Last clean freed {0} MB",
   "Dashboard.Used": "Used", "Dashboard.Timeline": "Memory Usage Timeline", "Dashboard.L2Failed": "Deep clean needs one-time admin approval; it won't ask again ({0})",
   "Dashboard.L1Failed": "Clean failed: {0}",
+  "Processes.Col.Pid": "PID", "Processes.Col.Cpu": "CPU", "Processes.Col.Status": "Status",
   "Processes.Col.Name": "Process", "Processes.Col.Memory": "Memory", "Processes.Col.Path": "Path",
   "Processes.Col.Whitelist": "Whitelisted", "Processes.Refresh": "Refresh",
   "Processes.AddWhitelist": "Add to Whitelist",

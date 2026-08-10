@@ -11,10 +11,13 @@ namespace AiMemoryManager.ViewModels;
 /// <summary>进程列表行:包装快照,附加白名单/系统关键/可终止状态。</summary>
 public partial class ProcessItemViewModel : ObservableObject
 {
-    public required ProcessSnapshot Snapshot { get; init; }
+    public required ProcessSnapshot Snapshot { get; set; }
+    public int Pid => Snapshot.Pid;
     public string Name => Snapshot.Name;
     public string MemoryText => $"{Snapshot.WorkingSetBytes / (1 << 20)} MB";
     public string? Path => Snapshot.Path;
+    public string CpuText => $"{CpuPercent:0.0}%";
+    public string StatusText => Snapshot.HasVisibleWindow ? "前台" : "后台";
 
     /// <summary>系统关键进程(csrss 等):不可加白,UI 灰显。初始化后不变。</summary>
     public required bool IsCritical { get; init; }
@@ -26,12 +29,33 @@ public partial class ProcessItemViewModel : ObservableObject
     /// <summary>L3 勾选:仅 CanKill 行可选中。</summary>
     [ObservableProperty] private bool _isSelected;
 
-    /// <summary>FR-2.3:非系统关键/非白名单/非防误杀/非前台才可终止(FilterCandidates 批量算一次后映射回行)。</summary>
+    /// <summary>FR-2.3:非系统关键/非白名单/非防误杀/非前台才可终止。</summary>
     [ObservableProperty] private bool _canKill;
+
+    public double CpuPercent { get; private set; }
+
+    public void UpdateSnapshot(ProcessSnapshot snapshot, double cpuPercent)
+    {
+        Snapshot = snapshot;
+        CpuPercent = cpuPercent;
+        OnPropertyChanged(nameof(Pid));
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(MemoryText));
+        OnPropertyChanged(nameof(Path));
+        OnPropertyChanged(nameof(CpuPercent));
+        OnPropertyChanged(nameof(CpuText));
+        OnPropertyChanged(nameof(StatusText));
+    }
 }
 
-public partial class ProcessesViewModel : ObservableObject
+public partial class ProcessesViewModel : ObservableObject, IDisposable
 {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1.5);
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private CancellationTokenSource? _monitorCts;
+    private Task? _monitorTask;
+    private Dictionary<int, ProcessSample> _previousSamples = new();
+
     public ObservableCollection<ProcessItemViewModel> Items { get; } = new();
 
     /// <summary>FR-2.7 后悔药:最近被本应用结束的进程(新的在前)。</summary>
@@ -42,48 +66,97 @@ public partial class ProcessesViewModel : ObservableObject
     /// <summary>终止/恢复的结果状态文本。</summary>
     [ObservableProperty] private string _statusText = "";
 
-    /// <summary>进程枚举在线程池执行,避免 System.Diagnostics.Process 的权限查询阻塞界面线程。</summary>
+    /// <summary>当前是否正在抓取一批进程样本。</summary>
     [ObservableProperty] private bool _isRefreshing;
 
-    /// <summary>重新枚举进程:只列工作集 &gt; 10MB 的,按内存降序。</summary>
-    [RelayCommand]
-    private async Task RefreshAsync()
+    /// <summary>页面可见时每 1.5 秒更新一次,模拟任务管理器的实时列表。</summary>
+    [ObservableProperty] private bool _isMonitoring;
+
+    [ObservableProperty] private string _lastUpdatedText = "—";
+
+    public string LiveSummaryText =>
+        $"{(IsMonitoring ? "实时监控中" : "监控已暂停")} · {Items.Count} 个进程 · 最近更新 {LastUpdatedText}";
+
+    /// <summary>开始后台轮询。页面导航回来时可重复调用,不会启动多个轮询任务。</summary>
+    public void StartMonitoring()
     {
-        if (IsRefreshing) return;
+        if (_monitorTask is { IsCompleted: false }) return;
+        _monitorCts?.Dispose();
+        _monitorCts = new CancellationTokenSource();
+        IsMonitoring = true;
+        _monitorTask = MonitorLoopAsync(_monitorCts.Token);
+    }
+
+    /// <summary>页面离开时停止轮询,避免隐藏页面继续占用进程枚举和 CPU。</summary>
+    public void StopMonitoring()
+    {
+        _monitorCts?.Cancel();
+        _monitorCts = null;
+        IsMonitoring = false;
+        OnPropertyChanged(nameof(LiveSummaryText));
+    }
+
+    private async Task MonitorLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshCoreAsync(cancellationToken);
+            using var timer = new PeriodicTimer(RefreshInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+                await RefreshCoreAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 页面离开时的正常退出。
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+        }
+        finally
+        {
+            if (cancellationToken == _monitorCts?.Token)
+                IsMonitoring = false;
+            OnPropertyChanged(nameof(LiveSummaryText));
+        }
+    }
+
+    /// <summary>手动刷新仍可用,但与实时轮询共享门闩,不会并发枚举进程。</summary>
+    [RelayCommand]
+    private Task RefreshAsync() => RefreshCoreAsync(CancellationToken.None);
+
+    private async Task RefreshCoreAsync(CancellationToken cancellationToken)
+    {
+        if (!await _refreshGate.WaitAsync(0, cancellationToken)) return;
         IsRefreshing = true;
         try
         {
-            // Process.MainModule/FileName 可能因权限或退出中的进程而变慢,绝不能在 UI 线程执行。
+            // Process.MainModule/FileName 和 TotalProcessorTime 可能因权限或退出中的进程而变慢,
+            // 全部在线程池抓取,UI 线程只做轻量的差量更新。
             var rows = await Task.Run(() =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var snaps = Locator.Native.GetProcessSnapshots()
                     .Where(p => p.WorkingSetBytes > 10L << 20)
                     .OrderByDescending(p => p.WorkingSetBytes)
                     .ToList();
-                // 可终止判定批量算一次(内部含一次快照),再按 PID 映射回行,避免逐行重复快照
-                var killable = Locator.Terminator.FilterCandidates(snaps.Select(p => p.Pid).ToList()).ToHashSet();
+                var killable = Locator.Terminator.FilterCandidates(snaps).ToHashSet();
                 return snaps.Select(p => new ProcessRowData(
                     p,
                     Locator.Whitelist.IsExcluded(p.Name),
                     Locator.Whitelist.IsSystemCritical(p.Name),
                     killable.Contains(p.Pid))).ToList();
-            });
+            }, cancellationToken);
 
-            Items.Clear();
-            foreach (var row in rows)
-            {
-                var item = new ProcessItemViewModel
-                {
-                    Snapshot = row.Snapshot,
-                    IsExcluded = row.IsExcluded,
-                    IsCritical = row.IsCritical,
-                    CanKill = row.CanKill
-                };
-                item.PropertyChanged += OnItemPropertyChanged;
-                Items.Add(item);
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            ApplyRows(rows);
             RefreshKillLog();
             TerminateSelectedCommand.NotifyCanExecuteChanged();
+            StatusText = "";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 页面离开时的正常退出。
         }
         catch (Exception ex)
         {
@@ -92,8 +165,81 @@ public partial class ProcessesViewModel : ObservableObject
         finally
         {
             IsRefreshing = false;
+            _refreshGate.Release();
         }
     }
+
+    private void ApplyRows(IReadOnlyList<ProcessRowData> rows)
+    {
+        var now = DateTimeOffset.Now;
+        var incoming = rows.ToDictionary(r => r.Snapshot.Pid);
+        var existing = Items.ToDictionary(i => i.Pid);
+
+        // 只移除已经退出的进程,不 Clear 集合,从而保留 DataGrid 的行容器、选中状态和滚动位置。
+        foreach (var item in Items.Where(i => !incoming.ContainsKey(i.Pid)).ToList())
+        {
+            item.PropertyChanged -= OnItemPropertyChanged;
+            Items.Remove(item);
+        }
+
+        if (existing.Count == 0)
+        {
+            foreach (var row in rows)
+                AddItem(row, now);
+        }
+        else
+        {
+            foreach (var row in rows)
+            {
+                if (existing.TryGetValue(row.Snapshot.Pid, out var item))
+                {
+                    var cpu = CalculateCpuPercent(row.Snapshot, now);
+                    item.UpdateSnapshot(row.Snapshot, cpu);
+                    item.IsExcluded = row.IsExcluded;
+                    item.CanKill = row.CanKill;
+                    if (!item.CanKill) item.IsSelected = false;
+                }
+                else
+                {
+                    AddItem(row, now);
+                }
+            }
+        }
+
+        _previousSamples = rows.ToDictionary(
+            r => r.Snapshot.Pid,
+            r => new ProcessSample(r.Snapshot.TotalProcessorTime, now, r.Snapshot.Name));
+        LastUpdatedText = now.ToString("HH:mm:ss");
+        OnPropertyChanged(nameof(LiveSummaryText));
+    }
+
+    private void AddItem(ProcessRowData row, DateTimeOffset now)
+    {
+        var item = new ProcessItemViewModel
+        {
+            Snapshot = row.Snapshot,
+            IsExcluded = row.IsExcluded,
+            IsCritical = row.IsCritical,
+            CanKill = row.CanKill
+        };
+        item.UpdateSnapshot(row.Snapshot, CalculateCpuPercent(row.Snapshot, now));
+        item.PropertyChanged += OnItemPropertyChanged;
+        Items.Add(item);
+    }
+
+    private double CalculateCpuPercent(ProcessSnapshot current, DateTimeOffset now)
+    {
+        if (!_previousSamples.TryGetValue(current.Pid, out var previous) ||
+            !string.Equals(previous.Name, current.Name, StringComparison.OrdinalIgnoreCase))
+            return 0;
+
+        var wall = now - previous.Timestamp;
+        var cpu = current.TotalProcessorTime - previous.CpuTime;
+        if (wall <= TimeSpan.Zero || cpu <= TimeSpan.Zero) return 0;
+        return Math.Clamp(cpu.TotalMilliseconds / wall.TotalMilliseconds / Environment.ProcessorCount * 100, 0, 100);
+    }
+
+    private sealed record ProcessSample(TimeSpan CpuTime, DateTimeOffset Timestamp, string Name);
 
     private sealed record ProcessRowData(
         ProcessSnapshot Snapshot,
@@ -103,7 +249,6 @@ public partial class ProcessesViewModel : ObservableObject
 
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // 勾选变化 → "结束选中进程"按钮可用态重估
         if (e.PropertyName == nameof(ProcessItemViewModel.IsSelected))
             TerminateSelectedCommand.NotifyCanExecuteChanged();
     }
@@ -111,30 +256,26 @@ public partial class ProcessesViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanTerminateSelected))]
     private async Task TerminateSelectedAsync()
     {
-        // async 命令:全程 try/catch,终止失败只落状态文本,不抛回 UI 线程
         try
         {
             var targets = Items.Where(i => i.IsSelected && i.CanKill).ToList();
             if (targets.Count == 0) return;
 
-            // FR-2.6:打开对话框时逐个查未保存迹象,结果随清单传入对话框
             var rows = targets.Select(t => new TerminateConfirmItem(
                 t.Snapshot.Pid, t.Name, t.Path, t.Snapshot.WorkingSetBytes,
                 Locator.Unsaved.HasUnsavedSigns(t.Snapshot.Pid))).ToList();
 
-            // L3 默认必须用户确认:无静默终止路径
             var dlg = new TerminateConfirmDialog(rows) { Owner = System.Windows.Application.Current.MainWindow };
             if (dlg.ShowDialog() != true) return;
 
             var r = await Locator.Terminator.TerminateAsync(dlg.SelectedPids);
             int ok = r.Items.Count(i => i.Success);
             int fail = r.Items.Count - ok;
-            // 成功终止后才记历史(Manual L3 的唯一记录点;Locator 故意不给 Terminator 挂历史订阅)
             if (ok > 0)
                 Locator.History.Record(new CleanHistoryEntry(
                     DateTimeOffset.Now, CleanLevel.L3, r.FreedBytes, ok, CleanTrigger.Manual));
             StatusText = string.Format(Locator.L10n["L3.Result"], ok, r.FreedBytes / (1 << 20), fail);
-            await RefreshAsync();
+            await RefreshCoreAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {
@@ -144,7 +285,6 @@ public partial class ProcessesViewModel : ObservableObject
 
     private bool CanTerminateSelected() => Items.Any(i => i.IsSelected && i.CanKill);
 
-    /// <summary>FR-2.7 后悔药:按记录的路径+参数重启进程。</summary>
     [RelayCommand]
     private void RestoreAsync(KillRecord? record)
     {
@@ -173,11 +313,18 @@ public partial class ProcessesViewModel : ObservableObject
         if (item == null || item.IsCritical || item.IsExcluded) return;
         Locator.Whitelist.Add(item.Name);
         item.IsExcluded = true;
-        // 右键菜单对同一行重复打开时绑定不会重估,需主动刷新命令可用态
+        item.CanKill = false;
+        item.IsSelected = false;
         AddToWhitelistCommand.NotifyCanExecuteChanged();
+        TerminateSelectedCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>系统关键进程与已加白进程禁用右键菜单项。</summary>
     private bool CanAddToWhitelist(ProcessItemViewModel? item) =>
         item is not null && !item.IsCritical && !item.IsExcluded;
+
+    public void Dispose()
+    {
+        StopMonitoring();
+        _refreshGate.Dispose();
+    }
 }

@@ -8,6 +8,11 @@ namespace AiMemoryManager.Native;
 
 public class NativeMemoryApi : INativeMemoryApi
 {
+    // Reading MainModule.FileName can be noticeably slower than reading the
+    // rest of Process. Keep it per PID/name so a one-second refresh does not
+    // repeatedly perform the same privileged query.
+    private readonly object _pathCacheLock = new();
+    private readonly Dictionary<int, (string Name, string? Path)> _pathCache = new();
     [StructLayout(LayoutKind.Sequential)]
     private struct MEMORYSTATUSEX
     {
@@ -62,20 +67,44 @@ public class NativeMemoryApi : INativeMemoryApi
     public IReadOnlyList<ProcessSnapshot> GetProcessSnapshots()
     {
         var list = new List<ProcessSnapshot>();
+        var seenPids = new HashSet<int>();
         foreach (var p in Process.GetProcesses())
         {
             using (p)
             {
                 try
                 {
-                    string? path = null;
-                    try { path = p.MainModule?.FileName; } catch { /* 无权限读路径 */ }
+                    seenPids.Add(p.Id);
+                    string? path;
+                    lock (_pathCacheLock)
+                    {
+                        if (_pathCache.TryGetValue(p.Id, out var cached) &&
+                            string.Equals(cached.Name, p.ProcessName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            path = cached.Path;
+                        }
+                        else
+                        {
+                            path = null;
+                            try { path = p.MainModule?.FileName; } catch { /* 无权限读路径 */ }
+                            _pathCache[p.Id] = (p.ProcessName, path);
+                        }
+                    }
+
+                    TimeSpan cpu = default;
+                    try { cpu = p.TotalProcessorTime; } catch { /* 进程退出或无权限 */ }
                     list.Add(new ProcessSnapshot(
                         p.Id, p.ProcessName, path, p.WorkingSet64,
-                        p.MainWindowHandle != IntPtr.Zero));
+                        p.MainWindowHandle != IntPtr.Zero, cpu));
                 }
                 catch { /* 进程已退出,跳过 */ }
             }
+        }
+
+        lock (_pathCacheLock)
+        {
+            foreach (var pid in _pathCache.Keys.Where(pid => !seenPids.Contains(pid)).ToList())
+                _pathCache.Remove(pid);
         }
         return list;
     }

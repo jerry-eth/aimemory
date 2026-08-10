@@ -19,15 +19,27 @@ public class ProcessTerminateService
 
     public IReadOnlyList<int> FilterCandidates(IReadOnlyCollection<int> pids)
     {
-        var names = _native.GetProcessSnapshots().ToDictionary(p => p.Pid, p => p.Name);
-        return pids.Where(pid =>
+        return FilterCandidates(_native.GetProcessSnapshots(), pids);
+    }
+
+    /// <summary>
+    /// Filters against an already collected sample. The process page uses this
+    /// overload so a refresh does not enumerate every process a second time.
+    /// </summary>
+    public IReadOnlyList<int> FilterCandidates(
+        IReadOnlyCollection<ProcessSnapshot> snapshots,
+        IReadOnlyCollection<int>? pids = null)
+    {
+        var names = snapshots.ToDictionary(p => p.Pid, p => p.Name);
+        var candidates = pids ?? snapshots.Select(p => p.Pid).ToArray();
+        var foregroundPid = _native.GetForegroundPid();
+        return candidates.Where(pid =>
         {
             if (!names.TryGetValue(pid, out var name)) return false;
-            if (pid == Environment.ProcessId) return false;
+            if (_guard.IsProtected(pid, foregroundPid)) return false;
             if (_whitelist.IsSystemCritical(name)) return false;
             if (_whitelist.IsExcluded(name)) return false;
             if (_whitelist.IsNoKill(name)) return false;
-            if (_guard.IsProtected(pid)) return false;
             return true;
         }).ToList();
     }

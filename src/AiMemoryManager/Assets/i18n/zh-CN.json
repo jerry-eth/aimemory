@@ -7,6 +7,7 @@
   "Dashboard.CleanL2": "深度清理(需管理员)", "Dashboard.LastClean": "上次清理释放 {0} MB",
   "Dashboard.Used": "已用", "Dashboard.Timeline": "内存使用时间线", "Dashboard.L2Failed": "深度清理需要一次管理员授权,授权后不再询问({0})",
   "Dashboard.L1Failed": "清理失败:{0}",
+  "Processes.Col.Pid": "PID", "Processes.Col.Cpu": "CPU", "Processes.Col.Status": "状态",
   "Processes.Col.Name": "进程", "Processes.Col.Memory": "内存", "Processes.Col.Path": "路径",
   "Processes.Col.Whitelist": "白名单", "Processes.Refresh": "刷新",
   "Processes.AddWhitelist": "加入白名单",
