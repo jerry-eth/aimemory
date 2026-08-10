@@ -21,7 +21,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Grid Width="180" Height="180">
-                <c:PercentageRing Percent="{Binding Percent}" StrokeThickness="12"
+                <c:PercentageRing Percent="{Binding Percent}" AnimationsEnabled="{Binding AnimationsEnabled}" StrokeThickness="12"
                                   RingBrush="{DynamicResource SystemFillColorAttentionBrush}"
                                   TrackBrush="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">

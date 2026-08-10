@@ -40,6 +40,6 @@
 ## 5. 自动化证据
 
 - Release 构建：0 警告、0 错误。
-- Release 测试：161 通过、2 跳过（真实 LLM 端点测试未配置密钥）、0 失败，共 163 项。
+- Release 测试：168 通过、2 跳过（真实 LLM 端点测试未配置 `AMM_TEST_LLM_KEY`）、0 失败，共 170 项。
 - App Certification Kit：退出码 0；清单、资源、UAC 等关键检查通过。报告为 WARNING，原因是测试证书/自包含运行时及应用确实使用 `Process.Start`、系统组件包含进程启动 API；该结果不替代正式签名和商店认证。
 - MSIX 产物和测试证书均位于 `artifacts/`，已通过 `.gitignore` 排除，不得提交。

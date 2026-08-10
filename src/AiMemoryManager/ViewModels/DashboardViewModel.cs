@@ -28,18 +28,23 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     public ObservableCollection<HistoryRow> HistoryRows { get; } = new();
     public bool HasHistory => HistoryRows.Count > 0;
     public bool HistoryEmpty => HistoryRows.Count == 0;
+    public bool AnimationsEnabled => Locator.Settings.Current.AnimationsEnabled;
 
     public DashboardViewModel()
     {
         Locator.Monitor.Sampled += OnSampled;
         Locator.Clean.CleanCompleted += OnCleaned;
         Locator.History.Changed += OnHistoryChanged;
+        Locator.Settings.SettingsSaved += OnSettingsSaved;
         RebuildHistory();
         Refresh();
     }
 
     private void OnHistoryChanged(object? s, EventArgs e) =>
         App.Current.Dispatcher.Invoke(RebuildHistory);
+
+    private void OnSettingsSaved(object? s, EventArgs e) =>
+        App.Current.Dispatcher.Invoke(() => OnPropertyChanged(nameof(AnimationsEnabled)));
 
     private void RebuildHistory()
     {
@@ -104,5 +109,6 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
         Locator.Monitor.Sampled -= OnSampled;
         Locator.Clean.CleanCompleted -= OnCleaned;
         Locator.History.Changed -= OnHistoryChanged;
+        Locator.Settings.SettingsSaved -= OnSettingsSaved;
     }
 }

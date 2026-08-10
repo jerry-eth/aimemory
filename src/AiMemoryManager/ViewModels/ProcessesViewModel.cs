@@ -18,6 +18,12 @@ public partial class ProcessItemViewModel : ObservableObject
     public string? Path => Snapshot.Path;
     public string CpuText => $"{CpuPercent:0.0}%";
     public string StatusText => Snapshot.HasVisibleWindow ? "前台" : "后台";
+    public string SignatureText => Snapshot.SignatureStatus switch
+    {
+        ProcessSignatureStatus.Signed => Locator.L10n["Processes.Signature.Signed"],
+        ProcessSignatureStatus.Unsigned => Locator.L10n["Processes.Signature.Unsigned"],
+        _ => Locator.L10n["Processes.Signature.Unknown"]
+    };
 
     /// <summary>系统关键进程(csrss 等):不可加白,UI 灰显。初始化后不变。</summary>
     public required bool IsCritical { get; init; }
@@ -45,6 +51,7 @@ public partial class ProcessItemViewModel : ObservableObject
         OnPropertyChanged(nameof(CpuPercent));
         OnPropertyChanged(nameof(CpuText));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(SignatureText));
     }
 }
 
@@ -328,4 +335,3 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         _refreshGate.Dispose();
     }
 }
-

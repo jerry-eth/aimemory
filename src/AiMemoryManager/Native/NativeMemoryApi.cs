@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using AiMemoryManager.Models;
+using AiMemoryManager.Services;
 
 namespace AiMemoryManager.Native;
 
@@ -13,6 +15,7 @@ public class NativeMemoryApi : INativeMemoryApi
     // repeatedly perform the same privileged query.
     private readonly object _pathCacheLock = new();
     private readonly Dictionary<int, (string Name, string? Path)> _pathCache = new();
+    private readonly Dictionary<string, ProcessSignatureStatus> _signatureCache = new(StringComparer.OrdinalIgnoreCase);
     [StructLayout(LayoutKind.Sequential)]
     private struct MEMORYSTATUSEX
     {
@@ -93,9 +96,10 @@ public class NativeMemoryApi : INativeMemoryApi
 
                     TimeSpan cpu = default;
                     try { cpu = p.TotalProcessorTime; } catch { /* 进程退出或无权限 */ }
+                    var signature = GetSignatureStatus(path);
                     list.Add(new ProcessSnapshot(
                         p.Id, p.ProcessName, path, p.WorkingSet64,
-                        p.MainWindowHandle != IntPtr.Zero, cpu));
+                        p.MainWindowHandle != IntPtr.Zero, cpu, signature));
                 }
                 catch { /* 进程已退出,跳过 */ }
             }
@@ -105,8 +109,27 @@ public class NativeMemoryApi : INativeMemoryApi
         {
             foreach (var pid in _pathCache.Keys.Where(pid => !seenPids.Contains(pid)).ToList())
                 _pathCache.Remove(pid);
+            foreach (var path in _signatureCache.Keys.Where(path => !File.Exists(path)).ToList())
+                _signatureCache.Remove(path);
         }
         return list;
+    }
+
+    private ProcessSignatureStatus GetSignatureStatus(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return ProcessSignatureStatus.Unknown;
+
+        lock (_pathCacheLock)
+        {
+            if (_signatureCache.TryGetValue(path, out var cached))
+                return cached;
+        }
+
+        var status = DigitalSignatureService.GetStatus(path);
+        lock (_pathCacheLock)
+            _signatureCache[path] = status;
+        return status;
     }
 
     public long EmptyWorkingSets(IReadOnlyCollection<int> pids)
