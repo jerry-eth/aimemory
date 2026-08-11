@@ -24,6 +24,8 @@ public sealed class AnalysisActionPlanService
                 var l1 = await Locator.Clean.RunL1Async(CleanTrigger.Conversation, ct);
                 return new AnalysisActionExecutionResult(plan.Operation, l1.FreedBytes, l1.ProcessCount, 0);
             case "purge_standby":
+                if (!Locator.L2.IsAvailable)
+                    return new AnalysisActionExecutionResult(plan.Operation, 0, 0, 1);
                 var l2 = await Locator.Clean.RunL2Async(CleanTrigger.Conversation, ct);
                 return new AnalysisActionExecutionResult(plan.Operation, l2.FreedBytes, 0, 0);
             case "terminate_processes":

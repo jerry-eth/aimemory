@@ -14,6 +14,7 @@ public class RuleEngine
     private readonly INativeMemoryApi _native;
     private readonly ForegroundGuard _guard;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly Func<bool>? _l2Available;
 
     private int _overCount;
     private DateTimeOffset _lastFire = DateTimeOffset.MinValue;
@@ -21,9 +22,10 @@ public class RuleEngine
 
     public event EventHandler<CleanRequest>? CleanRequested;
 
-    public RuleEngine(SettingsService settings, INativeMemoryApi native, ForegroundGuard guard, Func<DateTimeOffset> clock)
+    public RuleEngine(SettingsService settings, INativeMemoryApi native, ForegroundGuard guard,
+        Func<DateTimeOffset> clock, Func<bool>? l2Available = null)
     {
-        (_settings, _native, _guard, _clock) = (settings, native, guard, clock);
+        (_settings, _native, _guard, _clock, _l2Available) = (settings, native, guard, clock, l2Available);
         _lastTimerFire = clock();
     }
 
@@ -33,7 +35,8 @@ public class RuleEngine
         if (!s.RulesMasterEnabled) { _overCount = 0; return; }   // 总开关关闭:全部规则静默
         _guard.IsFullscreenSettingEnabled = s.OnlyWhenNotFullscreen;
         var now = _clock();
-        var level = s.AutoCleanIncludeL2 ? CleanLevel.L2 : CleanLevel.L1;
+        var level = s.AutoCleanIncludeL2 && (_l2Available?.Invoke() ?? true)
+            ? CleanLevel.L2 : CleanLevel.L1;
 
         if (s.ThresholdRuleEnabled && !_guard.ShouldSuppressAutoClean())
         {

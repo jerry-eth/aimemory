@@ -10,6 +10,10 @@
     <RootNamespace>AiMemoryManager</RootNamespace>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(StoreCompatible)' == 'true'">
+    <DefineConstants>$(DefineConstants);STORE_COMPATIBLE</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.2" />
@@ -24,7 +28,7 @@
   </ItemGroup>
 
   <!-- 提权助手:不引用程序集,仅把产物(含 exe)复制到主程序输出目录,供 ElevatedL2Service 启动 -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(StoreCompatible)' != 'true'">
     <ProjectReference Include="..\AiMemoryManager.ElevatedHelper\AiMemoryManager.ElevatedHelper.csproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <OutputItemType>Content</OutputItemType>

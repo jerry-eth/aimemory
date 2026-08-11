@@ -51,6 +51,8 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>FR-8.3 开机自启:setter 写注册表 Run 键并保存设置,getter 回读注册表真实状态。</summary>
+    public bool StartupAvailable => Locator.Startup.IsAvailable;
+
     public bool AutoStartEnabled
     {
         get => Locator.Startup.IsEnabled;

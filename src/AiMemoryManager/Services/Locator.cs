@@ -49,10 +49,14 @@ public static class Locator
         Whitelist = new WhitelistService(Settings);
         Blacklist = new BlacklistService(Settings);
         Guard = new ForegroundGuard(Native, () => Environment.ProcessId);
+#if STORE_COMPATIBLE
+        L2 = new UnavailableL2Executor();
+#else
         var helperPath = Path.Combine(AppContext.BaseDirectory, "AiMemoryManager.ElevatedHelper.exe");
         L2 = new ElevatedL2Service(helperPath);
+#endif
         Clean = new CleanService(Native, Whitelist, L2, Guard);
-        Rules = new RuleEngine(Settings, Native, Guard, () => DateTimeOffset.Now);
+        Rules = new RuleEngine(Settings, Native, Guard, () => DateTimeOffset.Now, () => L2.IsAvailable);
         Monitor = new MemoryMonitorService(Native);
         L10n = new LocalizationService(Path.Combine(AppContext.BaseDirectory, "Assets", "i18n"));
         if (Settings.Current.Language == "auto") L10n.SetAuto();

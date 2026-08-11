@@ -22,10 +22,10 @@ public class RuleEngineTests : IDisposable
     }
     public void Dispose() => Directory.Delete(_dir, true);
 
-    private RuleEngine Create(out List<CleanRequest> fired)
+    private RuleEngine Create(out List<CleanRequest> fired, Func<bool>? l2Available = null)
     {
         var list = new List<CleanRequest>();
-        var e = new RuleEngine(_settings, _native, _guard, () => _now);
+        var e = new RuleEngine(_settings, _native, _guard, () => _now, l2Available);
         e.CleanRequested += (_, r) => list.Add(r);
         fired = list;
         return e;
@@ -110,6 +110,17 @@ public class RuleEngineTests : IDisposable
         _now += TimeSpan.FromMinutes(61);               // 定时条件也满足
         e.Tick();
         Assert.Empty(fired);
+    }
+
+    [Fact] public void 商店模式_L2不可用时自动规则降级为L1()
+    {
+        _settings.Current.ThresholdRuleEnabled = true;
+        _settings.Current.SustainSeconds = 10;
+        _settings.Current.AutoCleanIncludeL2 = true;
+        var e = Create(out var fired, () => false);
+        SetUsage(95);
+        e.Tick();
+        Assert.Equal(CleanLevel.L1, fired[0].Level);
     }
 
     [Fact] public void 触发级别跟随AutoCleanIncludeL2设置()

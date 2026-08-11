@@ -29,6 +29,7 @@ public partial class DashboardViewModel : ObservableObject, IDisposable
     public bool HasHistory => HistoryRows.Count > 0;
     public bool HistoryEmpty => HistoryRows.Count == 0;
     public bool AnimationsEnabled => Locator.Settings.Current.AnimationsEnabled;
+    public bool IsL2Available => Locator.L2.IsAvailable;
 
     public DashboardViewModel()
     {

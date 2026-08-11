@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+\.\d+$')]
     [string]$Version = '1.0.0.0',
@@ -10,6 +10,7 @@ param(
     [string]$CertificatePath,
     [string]$CertificatePassword,
     [switch]$SelfContained,
+    [switch]$StoreCompatible,
     [switch]$KeepStage
 )
 
@@ -20,9 +21,11 @@ $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $artifacts = Join-Path $repo 'artifacts\msix'
 $stage = Join-Path $repo 'artifacts\msix-stage'
 $publish = $stage
-$manifestTemplate = Join-Path $PSScriptRoot 'Package.appxmanifest'
+$manifestName = if ($StoreCompatible) { 'Package.Store.appxmanifest' } else { 'Package.appxmanifest' }
+$manifestTemplate = Join-Path $PSScriptRoot $manifestName
 $assetSource = Join-Path $PSScriptRoot 'Assets'
-$packagePath = Join-Path $artifacts ("AiMemoryManager_{0}_{1}.msix" -f $Version,$Runtime)
+$packageSuffix = if ($StoreCompatible) { "_store" } else { "" }
+$packagePath = Join-Path $artifacts ("AiMemoryManager_{0}{1}_{2}.msix" -f $Version,$packageSuffix,$Runtime)
 
 function Assert-WorkspacePath([string]$path) {
     $full = [IO.Path]::GetFullPath($path)
@@ -40,12 +43,15 @@ if (Test-Path $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $publish | Out-Null
 
 $selfContainedValue = if ($SelfContained) { 'true' } else { 'false' }
-Write-Host "发布 WPF 应用 ($Configuration / $Runtime / self-contained=$selfContainedValue)..."
+Write-Host "发布 WPF 应用 ($Configuration / $Runtime / self-contained=$selfContainedValue / store=$StoreCompatible)..."
+$publishProperties = @()
+if ($StoreCompatible) { $publishProperties += '/p:StoreCompatible=true' }
 & dotnet publish (Join-Path $repo 'src\AiMemoryManager\AiMemoryManager.csproj') `
     --configuration $Configuration `
     --runtime $Runtime `
     --self-contained $selfContainedValue `
-    --output $publish
+    --output $publish `
+    @publishProperties
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败：$LASTEXITCODE" }
 
 Copy-Item -LiteralPath $manifestTemplate -Destination (Join-Path $stage 'AppxManifest.xml')

@@ -43,8 +43,8 @@
                     <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding Animations}"/>
                 </Grid>
             </ui:Card>
-            <!-- 开机自启卡 -->
-            <ui:Card Margin="0,4">
+            <!-- 开机自启卡：Store 兼容版不声明 StartupTask，因此隐藏该设置 -->
+            <ui:Card Margin="0,4" Visibility="{Binding StartupAvailable, Converter={StaticResource BoolToVis}}">
                 <Grid Margin="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>

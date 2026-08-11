@@ -7,6 +7,7 @@ namespace AiMemoryManager.Tests;
 
 public class FakeL2 : IL2Executor
 {
+    public bool IsAvailable => true;
     public bool IsHelperTaskRegistered => true;
     public void RegisterHelperTask() { }
     public long Freed { get; set; } = 500L << 20;
@@ -19,6 +20,7 @@ public class CleanServiceTests
     // 以下为 Task 6 既有用例(保留,不随本任务测试文件重写而丢失)
     private sealed class FakeL2Executor : IL2Executor
     {
+        public bool IsAvailable => true;
         public bool IsHelperTaskRegistered { get; set; } = true;
         public long FreedBytes { get; set; }
         public int RegisterCount { get; private set; }

@@ -12,6 +12,15 @@ namespace AiMemoryManager.Services;
 public class StartupService
 {
     public const string StartupTaskId = "AiMemoryManagerStartup";
+
+    public bool IsAvailable
+    {
+#if STORE_COMPATIBLE
+        get => false;
+#else
+        get => true;
+#endif
+    }
     private const string RunKeyName = "AiMemoryManager";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -48,6 +57,7 @@ public class StartupService
     {
         get
         {
+            if (!IsAvailable) return false;
             if (IsPackaged && TryGetPackagedState(out var state))
                 return state == StartupTaskState.Enabled;
             return _getRunKey(RunKeyName) != null;
@@ -56,6 +66,12 @@ public class StartupService
 
     public void SetEnabled(bool enabled)
     {
+        if (!IsAvailable)
+        {
+            _settings.Current.AutoStartEnabled = false;
+            _settings.Save();
+            return;
+        }
         try
         {
             if (IsPackaged && TrySetPackagedEnabled(enabled))

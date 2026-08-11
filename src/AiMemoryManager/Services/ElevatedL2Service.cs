@@ -6,6 +6,7 @@ namespace AiMemoryManager.Services;
 
 public interface IL2Executor
 {
+    bool IsAvailable { get; }
     bool IsHelperTaskRegistered { get; }
     void RegisterHelperTask();                              // 触发一次性 UAC
     Task<long> PurgeStandbyListAsync(CancellationToken ct); // 返回估算释放字节数
@@ -20,6 +21,8 @@ public class ElevatedL2Service : IL2Executor
                      "AiMemoryManager", "l2-result.json");
 
     public ElevatedL2Service(string helperPath) => _helperPath = helperPath;
+
+    public bool IsAvailable => true;
 
     public bool IsHelperTaskRegistered
     {
@@ -80,4 +83,20 @@ public class ElevatedL2Service : IL2Executor
         }
         throw new TimeoutException("L2 清理结果等待超时");
     }
+}
+
+/// <summary>
+/// Microsoft Store 兼容版的 L2 执行器。商店版不声明 allowElevation，
+/// 因此不注册最高权限计划任务，也不尝试绕过商店能力限制。
+/// </summary>
+public sealed class UnavailableL2Executor : IL2Executor
+{
+    public bool IsAvailable => false;
+    public bool IsHelperTaskRegistered => false;
+
+    public void RegisterHelperTask() =>
+        throw new NotSupportedException("当前商店版本未启用最高权限待机列表清理。");
+
+    public Task<long> PurgeStandbyListAsync(CancellationToken ct) =>
+        Task.FromException<long>(new NotSupportedException("当前商店版本未启用最高权限待机列表清理。"));
 }

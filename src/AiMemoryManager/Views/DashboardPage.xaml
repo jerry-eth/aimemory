@@ -39,7 +39,8 @@
                            Appearance="Primary" Command="{Binding CleanL1Command}"
                            Width="200" Height="40"/>
                 <ui:Button Content="{Binding [Dashboard.CleanL2], Source={x:Static services:Locator.L10n}}"
-                           Command="{Binding CleanL2Command}" Margin="0,12,0,0" Width="200"/>
+                           Command="{Binding CleanL2Command}" Visibility="{Binding IsL2Available, Converter={StaticResource BoolToVis}}"
+                           Margin="0,12,0,0" Width="200"/>
                 <TextBlock Text="{Binding LastCleanText}" Margin="0,12,0,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
