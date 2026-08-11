@@ -115,4 +115,23 @@ public class MigrationServiceTests : IDisposable
         Assert.Empty(_runs);                                     // robocopy 未启动
         Assert.True(File.Exists(Path.Combine(_src, "a.dat")));   // 源目录原样保留
     }
+
+    [Fact]
+    public async Task 目标盘消失时仍可从源备份回退()
+    {
+        var svc = new MigrationService(_native, _log, runner: args =>
+        {
+            _runs.Add(args);
+            return args[0] == "mklink" ? 1 : RunFake(args);
+        });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MigrateAsync(_src, _dst));
+        var entry = Assert.Single(svc.Log);
+        Directory.Delete(Path.Combine(_dst, "Games"), true);
+
+        Assert.True(await svc.RevertAsync(entry));
+        Assert.True(File.Exists(Path.Combine(_src, "a.dat")));
+        Assert.True(svc.Log[0].Reverted);
+    }
 }
+
+

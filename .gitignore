@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.example
 dist/
 bin/
 obj/
@@ -9,4 +11,10 @@ obj/
 artifacts/
 .claude/
 *.pfx
+*.p12
+*.pem
+*.key
 *.cer
+*.der
+secrets/
+credentials/

@@ -9,6 +9,7 @@
     <Page.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
+        <conv:InverseBoolConverter x:Key="InvBool"/>
         <!-- WPF-UI 4.3.0 不为原生 DataGrid 提供主题,沿用 TokenStatsPage 的最低限度适配 -->
         <Style x:Key="SlimGridHeader" TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
@@ -43,6 +44,10 @@
             <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
             <Setter Property="ColumnHeaderStyle" Value="{StaticResource SlimGridHeader}"/>
+            <Setter Property="EnableRowVirtualization" Value="True"/>
+            <Setter Property="EnableColumnVirtualization" Value="True"/>
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
         </Style>
         <!-- 勾选列模板:两张建议表共用 -->
         <DataTemplate x:Key="SelectCell">
@@ -50,16 +55,33 @@
                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </DataTemplate>
     </Page.Resources>
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="False" PanningMode="VerticalFirst">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" CanContentScroll="True" PanningMode="VerticalFirst">
         <StackPanel Margin="24" MinWidth="860">
+            <!-- 商业版 C 盘状态带：空间、扫描进度、取消和降级提示 -->
+            <ui:Card Margin="0,4">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding DiskSummaryText}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding LastScanText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <ui:Button Content="{Binding [Slim.Scan], Source={x:Static services:Locator.L10n}}" Command="{Binding ScanCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InvBool}}"/>
+                        <ui:Button Content="{Binding [Slim.CancelScan], Source={x:Static services:Locator.L10n}}" Command="{Binding CancelScanCommand}" IsEnabled="{Binding IsScanning}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="6" Margin="0,12,0,0" Minimum="0" Maximum="100" Value="{Binding ScanPercent}"/>
+                    <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding ScanProgressText}" Margin="0,6,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                </Grid>
+            </ui:Card>
             <!-- ① 扫描结果卡:扫描/LLM 分析按钮 + 状态文本 + 结果表(路径/大小/类别/文件数) -->
             <ui:Card Margin="0,4">
                 <StackPanel Margin="16">
                     <StackPanel Orientation="Horizontal">
                         <ui:Button Content="{Binding [Slim.Scan], Source={x:Static services:Locator.L10n}}"
-                                   Command="{Binding ScanCommand}"/>
+                                   Command="{Binding ScanCommand}" IsEnabled="{Binding IsScanning, Converter={StaticResource InvBool}}"/>
                         <ui:Button Content="{Binding [Slim.Analyze], Source={x:Static services:Locator.L10n}}"
-                                   Command="{Binding AnalyzeCommand}" Margin="8,0,0,0"/>
+                                   Command="{Binding AnalyzeCommand}" IsEnabled="{Binding IsAnalyzing, Converter={StaticResource InvBool}}" Margin="8,0,0,0"/>
                         <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Margin="12,0,0,0"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    TextWrapping="Wrap"/>
@@ -100,7 +122,7 @@
                         </DataGrid.Columns>
                     </DataGrid>
                     <ui:Button Content="{Binding [Slim.DeleteSelected], Source={x:Static services:Locator.L10n}}"
-                               Appearance="Danger" Command="{Binding DeleteSelectedCommand}"
+                               Appearance="Danger" Command="{Binding DeleteSelectedCommand}" IsEnabled="{Binding IsOperating, Converter={StaticResource InvBool}}"
                                HorizontalAlignment="Left" Margin="0,8,0,0"/>
                 </StackPanel>
             </ui:Card>
@@ -122,7 +144,7 @@
                         </DataGrid.Columns>
                     </DataGrid>
                     <ui:Button Content="{Binding [Slim.MigrateSelected], Source={x:Static services:Locator.L10n}}"
-                               Appearance="Danger" Command="{Binding MigrateSelectedCommand}"
+                               Appearance="Danger" Command="{Binding MigrateSelectedCommand}" IsEnabled="{Binding IsOperating, Converter={StaticResource InvBool}}"
                                HorizontalAlignment="Left" Margin="0,8,0,0"/>
                 </StackPanel>
             </ui:Card>
@@ -147,7 +169,7 @@
                                         <Grid>
                                             <ui:Button Content="{Binding [Slim.Revert], Source={x:Static services:Locator.L10n}}"
                                                        Command="{Binding DataContext.RevertCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                                       CommandParameter="{Binding}"
+                                                       CommandParameter="{Binding}" IsEnabled="{Binding DataContext.IsOperating, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource InvBool}}"
                                                        Visibility="{Binding Reverted, Converter={StaticResource InvBoolToVis}}"/>
                                             <TextBlock Text="{Binding RevertedText}" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -166,3 +188,7 @@
         </StackPanel>
     </ScrollViewer>
 </Page>
+
+
+
+

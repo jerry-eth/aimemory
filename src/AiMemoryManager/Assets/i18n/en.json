@@ -117,7 +117,7 @@
   "Dash.Trigger.Manual": "Manual", "Dash.Trigger.RuleThreshold": "Threshold Rule",
   "Dash.Trigger.RuleTimer": "Timer Rule", "Dash.Trigger.Tray": "Tray", "Dash.Trigger.Analysis": "Smart Analysis", "Dash.Trigger.Conversation": "Conversation",
   "Nav.CSlim": "Drive C Slimmer",
-  "Slim.Scan": "Scan Usage", "Slim.Scanning": "Scanning...", "Slim.Size": "Size", "Slim.Category": "Category",
+  "Slim.Scan": "Scan Usage", "Slim.CancelScan": "Cancel Scan", "Slim.ScanProgress": "Scan Progress", "Slim.Scanning": "Scanning...", "Slim.Size": "Size", "Slim.Category": "Category",
   "Slim.FileCount": "Files",
   "Slim.Analyze": "LLM Analysis", "Slim.NoProfile": "Configure an LLM profile first", "Slim.Advice": "Analysis Advice",
   "Slim.Cleanable": "Cleanable Items", "Slim.Migratable": "Migratable Items", "Slim.Reason": "Reason", "Slim.EstFree": "Est. Free",
@@ -139,3 +139,4 @@
   "Analysis.SelectAll": "Select All Executable", "Analysis.ClearSelection": "Clear Selection", "Analysis.SelectSuggestion": "Select this suggestion", "Analysis.SelectedCount": "Selected {0}/{1} executable suggestions", "Analysis.BatchTitle": "Confirm Smart Processing", "Analysis.BatchConfirm": "The LLM plan will process: compress {0} process(es) and end {1} process(es). End-process details will require a second confirmation. Continue?", "Analysis.BatchExecute": "Process Plan", "Analysis.BatchProcessing": "Processing plan…", "Analysis.BatchExecuted": "Smart processing complete: freed {0} MB, compressed {1}, ended successfully {2}, failed {3}", "Analysis.BatchNoSelection": "Select at least one executable suggestion first", "Analysis.BatchNoTargets": "The selected processes have exited or are protected; there are no executable targets", "Analysis.BatchFailed": "Smart processing failed: {0}",
   "Processes.Col.Signature": "Signature", "Processes.Signature.Signed": "Signed", "Processes.Signature.Unsigned": "Unsigned", "Processes.Signature.Unknown": "Unknown"
 }
+

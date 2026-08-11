@@ -7,198 +7,375 @@ using AiMemoryManager.Native;
 namespace AiMemoryManager.Services;
 
 /// <summary>
-/// 文件夹跨盘迁移(FR-12.4):robocopy /E 复制 → 文件数校验 → 删源 → 记日志 → mklink /J 建 junction → 一键回退。
-/// 外部命令经注入的 runner 执行(测试替身不跑真实 robocopy/mklink)。
-/// 安全顺序:任何失败都发生在删源之前,保证用户数据不丢;只有校验通过后才永久删除源。
+/// 事务式跨盘迁移：复制、双重校验、暂存源目录、建立 junction、确认可访问后完成。
+/// 任意中断都保留至少一个完整副本，并通过日志提供恢复/回退入口。
 /// </summary>
 public class MigrationService
 {
     public const int LogCapacity = 50;
-
-    private static readonly string[] RobocopyArgs = { "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP" };
+    private static readonly string[] RobocopyArgs = { "/E", "/COPY:DAT", "/DCOPY:DAT", "/XJ", "/R:1", "/W:1", "/NFL", "/NDL", "/NJH", "/NJS", "/NP" };
 
     private readonly INativeMemoryApi _native;
     private readonly string _logPath;
     private readonly Func<string[], int> _runner;
     private readonly LinkedList<MigrationLogEntry> _log = new();
+    private readonly object _gate = new();
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
 
-    public IReadOnlyList<MigrationLogEntry> Log => _log.ToList();
+    public IReadOnlyList<MigrationLogEntry> Log { get { lock (_gate) return _log.ToList(); } }
+    public IReadOnlyList<MigrationLogEntry> RecoverableLog => Log.Where(e => e.IsRecoverable).ToList();
 
     public MigrationService(INativeMemoryApi native, string logPath, Func<string[], int>? runner = null)
     {
         _native = native;
         _logPath = logPath;
         _runner = runner ?? DefaultRunner;
-        try
-        {
-            if (File.Exists(_logPath))
-                foreach (var e in JsonSerializer.Deserialize<List<MigrationLogEntry>>(File.ReadAllText(_logPath)) ?? new())
-                    _log.AddLast(e);
-        }
-        catch { }   // 日志损坏回退为空
+        Load();
     }
 
     public static string DefaultLogPath() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                     "AiMemoryManager", "migration-log.json");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AiMemoryManager", "migration-log.json");
 
-    /// <summary>占用检测(FR-12.5):返回可执行文件路径位于 folder 下的运行中进程名。</summary>
     public IReadOnlyList<string> GetBlockingProcesses(string folder)
     {
-        string full;
-        try { full = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar); }
-        catch { return Array.Empty<string>(); }
+        var full = PathSafetyService.Normalize(folder);
+        if (full is null) return Array.Empty<string>();
         var names = new List<string>();
-        foreach (var p in _native.GetProcessSnapshots())
+        try
         {
-            if (string.IsNullOrEmpty(p.Path)) continue;
-            string pp;
-            try { pp = Path.GetFullPath(p.Path); }
-            catch { continue; }
-            if (pp.StartsWith(full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                names.Add(p.Name);
+            foreach (var p in _native.GetProcessSnapshots())
+            {
+                if (string.IsNullOrWhiteSpace(p.Path)) continue;
+                var processPath = PathSafetyService.Normalize(p.Path);
+                if (processPath is not null && PathSafetyService.IsSameOrDescendant(processPath, full))
+                    names.Add(p.Name);
+            }
         }
-        return names;
+        catch { }
+        return names.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    public Task<MigrationLogEntry> MigrateAsync(string source, string targetRoot)
-        => Task.Run(() => Migrate(source, targetRoot));
-
-    public Task<bool> RevertAsync(MigrationLogEntry entry)
-        => Task.Run(() => Revert(entry));
-
-    private MigrationLogEntry Migrate(string source, string targetRoot)
+    public async Task<MigrationLogEntry> MigrateAsync(string source, string targetRoot, CancellationToken ct = default)
     {
-        // 执行端强制重查(FR-12.5):不依赖 UI/LLM 过滤,系统路径直接拒绝
-        if (SystemPathGuard.IsProtected(source))
-            throw new InvalidOperationException($"系统路径禁止迁移: {source}");
-        if (!Directory.Exists(source))
-            throw new InvalidOperationException($"源目录不存在: {source}");
+        await _operationGate.WaitAsync(ct);
+        try { return await Task.Run(() => Migrate(source, targetRoot, ct), ct); }
+        finally { _operationGate.Release(); }
+    }
 
-        // ① 占用检测:有进程从源目录运行则拒绝迁移
-        var blocking = GetBlockingProcesses(source);
-        if (blocking.Count > 0)
-            throw new InvalidOperationException($"文件夹被运行中进程占用,无法迁移: {string.Join(", ", blocking)}");
+    public async Task<bool> RevertAsync(MigrationLogEntry entry, CancellationToken ct = default)
+    {
+        await _operationGate.WaitAsync(ct);
+        try { return await Task.Run(() => Revert(entry, ct), ct); }
+        finally { _operationGate.Release(); }
+    }
 
-        string target = Path.Combine(targetRoot, Path.GetFileName(source.TrimEnd(Path.DirectorySeparatorChar)));
-        // 执行端强制重查(评审修复):解析后的完整目标路径同样不得落在受保护目录下,拒绝在 robocopy 启动之前
-        if (SystemPathGuard.IsProtected(target))
-            throw new InvalidOperationException($"目标为系统路径,禁止迁移: {target}");
+    private MigrationLogEntry Migrate(string source, string targetRoot, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var sourceFull = PathSafetyService.Normalize(source);
+        var rootFull = PathSafetyService.Normalize(targetRoot);
+        if (sourceFull is null || rootFull is null) throw new InvalidOperationException("源或目标路径格式无效");
+        if (!Directory.Exists(sourceFull)) throw new InvalidOperationException($"源目录不存在: {sourceFull}");
+        if (PathSafetyService.IsProtectedForOperation(sourceFull, DiskCategory.UserFolder, migration: true))
+            throw new InvalidOperationException($"系统或受保护路径禁止迁移: {sourceFull}");
+        if (!Directory.Exists(rootFull)) throw new InvalidOperationException($"目标盘或目录不可用: {rootFull}");
+        if (PathSafetyService.IsReparsePoint(rootFull)) throw new InvalidOperationException("目标目录是链接路径，无法安全迁移");
+
+        var sourceRoot = Path.GetPathRoot(sourceFull);
+        var targetRootDrive = Path.GetPathRoot(rootFull);
+        if (PathSafetyService.IsDriveRoot(rootFull) &&
+            string.Equals(sourceRoot, targetRootDrive, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("目标盘不能与源目录位于同一磁盘");
+
+        if (!PathSafetyService.IsSafeTarget(sourceFull, rootFull, out var target, out var targetError))
+            throw new InvalidOperationException(targetError);
         if (Directory.Exists(target) || File.Exists(target))
             throw new InvalidOperationException($"目标已存在: {target}");
 
-        // ② robocopy 复制(退出码 <8 为成功)
-        int code = _runner(new[] { "robocopy" }.Concat(RobocopyArgs).Concat(new[] { source, target }).ToArray());
-        if (code >= 8)
-            throw new InvalidOperationException($"robocopy 复制失败(退出码 {code}),源目录未改动");
+        var blocking = GetBlockingProcesses(sourceFull);
+        if (blocking.Count > 0)
+            throw new InvalidOperationException($"文件夹被运行中进程占用,无法迁移: {string.Join(", ", blocking)}");
 
-        // ③ 文件数校验:源 vs 目标递归计数,不等→中止并清理半成品副本,源目录保持原样
-        if (CountFiles(source) != CountFiles(target))
+        var sourceSnapshot = Snapshot(sourceFull, ct);
+        if (!sourceSnapshot.IsComplete)
+            throw new InvalidOperationException($"源目录存在无法读取的文件或链接（跳过 {sourceSnapshot.SkippedCount} 项），为避免数据丢失已停止迁移");
+        EnsureFreeSpace(rootFull, sourceSnapshot.Bytes);
+        var operationId = Guid.NewGuid().ToString("N");
+        var backup = sourceFull + ".aimm-backup-" + operationId;
+        var entry = new MigrationLogEntry(DateTimeOffset.Now, sourceFull, target, sourceFull, false)
         {
-            try { Directory.Delete(target, recursive: true); } catch { }
-            throw new InvalidOperationException("复制校验失败:源与目标文件数不一致,已中止迁移,源目录未改动");
-        }
+            OperationId = operationId,
+            BackupPath = backup,
+            State = MigrationState.Copying,
+            SourceBytes = sourceSnapshot.Bytes,
+            SourceFileCount = sourceSnapshot.Files,
+        };
+        AddOrUpdate(entry);
 
-        // ④ 永久删除源 — 有意为之(非回收站):大迁移回收站装不下,
-        //    UI(T12)在执行前已弹出明确警告;此刻副本已校验完整,删源不丢数据
-        Directory.Delete(source, recursive: true);
-
-        // ⑤ 先记日志(原子写,容量 50,新在前):必须在 mklink 之前落盘,
-        //    否则 mklink 失败时源已删、数据在 target 却无日志,一键回退通道丢失
-        var entry = new MigrationLogEntry(DateTimeOffset.Now, source, target, source, false);
-        _log.AddFirst(entry);
-        while (_log.Count > LogCapacity) _log.RemoveLast();
-        Persist();
-
-        // ⑥ 原位置建 junction;失败仅缺链接,日志已在,UI 可提示手动 mklink 或一键回退
-        int mk = _runner(new[] { "mklink", "/J", source, target });
-        if (mk != 0)
-            throw new InvalidOperationException($"创建 Junction 失败(mklink 退出码 {mk});数据已完整迁移至 {target},可在历史中一键回退");
-
-        return entry;
-    }
-
-    private bool Revert(MigrationLogEntry entry)
-    {
-        // 执行端强制重查(评审修复):日志是磁盘可编辑 JSON,被篡改/损坏的条目
-        // 不得导致永久删除或写回系统路径;任一路径受保护即拒绝,不做任何动作
-        if (SystemPathGuard.IsProtected(entry.Target) || SystemPathGuard.IsProtected(entry.Junction))
-            return false;
         try
         {
-            // ① 删 junction:真实环境 junction 是目录(reparse point),
-            //    Directory.Delete(junction, false) 只删链接本身、不递归目标;
-            //    兼容 File/Directory 两种存在形式。
-            //    测试替身里 mklink 假实现写的是 <junction>.junction 标记文件,
-            //    junction 本体不存在,跳过即可(顺手清掉标记文件)。
-            if (Directory.Exists(entry.Junction))
-                Directory.Delete(entry.Junction, recursive: false);
-            else if (File.Exists(entry.Junction))
-                File.Delete(entry.Junction);
-            if (File.Exists(entry.Junction + ".junction")) File.Delete(entry.Junction + ".junction");
+            ct.ThrowIfCancellationRequested();
+            int copyCode = _runner(new[] { "robocopy" }.Concat(RobocopyArgs).Concat(new[] { sourceFull, target }).ToArray());
+            if (copyCode >= 8)
+                throw new InvalidOperationException($"robocopy 复制失败(退出码 {copyCode}),源目录未改动");
+            if (!Directory.Exists(target)) throw new InvalidOperationException("复制完成但目标目录不存在");
 
-            // ② robocopy /E 移回原位置
-            int code = _runner(new[] { "robocopy" }.Concat(RobocopyArgs).Concat(new[] { entry.Target, entry.Junction }).ToArray());
-            if (code >= 8) return false;
-
-            // ③ 删除迁移副本(永久,与迁移删源同理)
-            if (Directory.Exists(entry.Target))
-                Directory.Delete(entry.Target, recursive: true);
-
-            // ④ 日志标记 Reverted
-            var node = _log.Find(entry);
-            if (node != null)
+            var targetSnapshot = Snapshot(target, ct);
+            if (!targetSnapshot.IsComplete || targetSnapshot.Files != sourceSnapshot.Files || targetSnapshot.Bytes != sourceSnapshot.Bytes)
             {
-                node.Value = entry with { Reverted = true };
-                Persist();
+                TryDeleteDirectory(target);
+                throw new InvalidOperationException($"复制校验失败：文件数/字节数不一致（源 {sourceSnapshot.Files} 个/{sourceSnapshot.Bytes} 字节，目标 {targetSnapshot.Files} 个/{targetSnapshot.Bytes} 字节）");
             }
-            return true;
+            entry = entry with { State = MigrationState.Copied, TargetBytes = targetSnapshot.Bytes, TargetFileCount = targetSnapshot.Files };
+            AddOrUpdate(entry);
+
+            // 复制期间若源目录发生变化，不能把旧快照挂回原路径。
+            var sourceBeforeStage = Snapshot(sourceFull, ct);
+            if (!sourceBeforeStage.IsComplete || sourceBeforeStage.Files != sourceSnapshot.Files || sourceBeforeStage.Bytes != sourceSnapshot.Bytes)
+            {
+                TryDeleteDirectory(target);
+                throw new InvalidOperationException("源目录在复制期间发生变化，已取消迁移；源目录未改动");
+            }
+
+            // 使用同盘 Move 暂存源目录，避免先永久删除源；这样 mklink/UAC/断电时仍可恢复。
+            if (Directory.Exists(backup)) throw new InvalidOperationException("发现同操作残留备份，已停止以避免覆盖数据");
+            Directory.Move(sourceFull, backup);
+            entry = entry with { State = MigrationState.SourceStaged };
+            AddOrUpdate(entry);
+
+            ct.ThrowIfCancellationRequested();
+            int mk = _runner(new[] { "mklink", "/J", sourceFull, target });
+            if (mk != 0)
+                throw new InvalidOperationException($"创建 Junction 失败(mklink 退出码 {mk});数据仍保留在目标和备份目录，可从历史记录回退");
+            if (!IsLinkCreated(sourceFull))
+                throw new InvalidOperationException("Junction 创建后未能确认原路径可访问");
+            entry = entry with { State = MigrationState.Linked };
+            AddOrUpdate(entry);
+
+            // 只有 junction 已确认，才清理源备份；目标目录是迁移后的唯一真实数据副本。
+            TryDeleteDirectory(backup);
+            if (Directory.Exists(backup))
+                throw new InvalidOperationException("迁移链接已建立，但源备份无法清理；为安全起见保留未完成状态");
+
+            entry = entry with { State = MigrationState.Completed, Error = null };
+            AddOrUpdate(entry);
+            return entry;
         }
-        catch { return false; }   // 任一步失败 → false,不抛
+        catch (OperationCanceledException)
+        {
+            var canceled = entry with { State = MigrationState.Failed, Error = "用户取消或操作被中断" };
+            AddOrUpdate(canceled);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var failed = entry with { State = MigrationState.Failed, Error = ex.Message };
+            AddOrUpdate(failed);
+            throw;
+        }
     }
 
-    private void Persist()
+    private bool Revert(MigrationLogEntry supplied, CancellationToken ct)
+    {
+        if (!ValidateLogEntry(supplied)) return false;
+        MigrationLogEntry entry = Find(supplied) ?? supplied;
+        if (entry.Reverted || entry.State == MigrationState.Reverted) return true;
+        AddOrUpdate(entry with { State = MigrationState.Reverting, Error = null });
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            var source = PathSafetyService.Normalize(entry.Source);
+            var target = PathSafetyService.Normalize(entry.Target);
+            var backup = PathSafetyService.Normalize(entry.BackupPath);
+            if (source is null || target is null) return false;
+            var hasBackup = backup is not null && Directory.Exists(backup);
+            if (!Directory.Exists(target) && !hasBackup) return false;
+            if (Directory.Exists(target) && PathSafetyService.IsReparsePoint(target)) return false;
+            if (File.Exists(target)) return false;
+
+            // 只删除确认过的 junction；普通目录绝不递归删除。
+            if (Directory.Exists(source))
+            {
+                if (!PathSafetyService.IsReparsePoint(source))
+                {
+                    if (backup is null || !Directory.Exists(backup)) return false;
+                }
+                else Directory.Delete(source, recursive: false);
+            }
+            if (File.Exists(source + ".junction")) File.Delete(source + ".junction");
+
+            if (backup is not null && Directory.Exists(backup))
+            {
+                if (Directory.Exists(source) || File.Exists(source)) return false;
+                Directory.Move(backup, source);
+                var restored = Snapshot(source, ct);
+                if (!restored.IsComplete || (entry.SourceFileCount > 0 && restored.Files != entry.SourceFileCount)) return false;
+            }
+            else
+            {
+                if (Directory.Exists(source) || File.Exists(source)) return false;
+                int code = _runner(new[] { "robocopy" }.Concat(RobocopyArgs).Concat(new[] { target, source }).ToArray());
+                if (code >= 8 || !Directory.Exists(source)) return false;
+                var restored = Snapshot(source, ct);
+                var expected = Snapshot(target, ct);
+                if (!restored.IsComplete || !expected.IsComplete || restored.Files != expected.Files || restored.Bytes != expected.Bytes) return false;
+            }
+
+            // 原路径数据已恢复并校验后，才删除迁移副本；目标盘已消失时无需删除。
+            if (Directory.Exists(target))
+            {
+                if (PathSafetyService.IsReparsePoint(target)) return false;
+                TryDeleteDirectory(target);
+                if (Directory.Exists(target)) return false;
+            }
+            var done = entry with { Reverted = true, State = MigrationState.Reverted, Error = null };
+            AddOrUpdate(done);
+            return true;
+        }
+        catch
+        {
+            AddOrUpdate(entry with { State = MigrationState.Failed, Error = "回退未完成，数据副本已保留" });
+            return false;
+        }
+    }
+
+    private bool ValidateLogEntry(MigrationLogEntry entry)
+    {
+        var source = PathSafetyService.Normalize(entry.Source);
+        var target = PathSafetyService.Normalize(entry.Target);
+        if (source is null || target is null) return false;
+        if (SystemPathGuard.IsProtected(source) || SystemPathGuard.IsProtected(target) || SystemPathGuard.IsProtected(entry.Junction)) return false;
+        if (PathSafetyService.IsDriveRoot(source) || PathSafetyService.IsDriveRoot(target)) return false;
+        if (PathSafetyService.IsSameOrDescendant(target, source) || PathSafetyService.IsSameOrDescendant(source, target)) return false;
+        return true;
+    }
+
+    private void Load()
+    {
+        try
+        {
+            if (!File.Exists(_logPath)) return;
+            var entries = JsonSerializer.Deserialize<List<MigrationLogEntry>>(File.ReadAllText(_logPath)) ?? new();
+            lock (_gate)
+            {
+                foreach (var entry in entries.Take(LogCapacity)) _log.AddLast(entry);
+            }
+        }
+        catch { }
+    }
+
+    private MigrationLogEntry? Find(MigrationLogEntry entry)
+    {
+        lock (_gate)
+            return _log.FirstOrDefault(e => e.OperationId == entry.OperationId) ??
+                   _log.FirstOrDefault(e => string.Equals(e.Source, entry.Source, StringComparison.OrdinalIgnoreCase) && string.Equals(e.Target, entry.Target, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void AddOrUpdate(MigrationLogEntry entry)
+    {
+        lock (_gate)
+        {
+            var node = _log.First;
+            while (node is not null)
+            {
+                if (node.Value.OperationId == entry.OperationId ||
+                    (string.Equals(node.Value.Source, entry.Source, StringComparison.OrdinalIgnoreCase) && string.Equals(node.Value.Target, entry.Target, StringComparison.OrdinalIgnoreCase)))
+                {
+                    node.Value = entry;
+                    PersistUnsafe();
+                    return;
+                }
+                node = node.Next;
+            }
+            _log.AddFirst(entry);
+            while (_log.Count > LogCapacity) _log.RemoveLast();
+            PersistUnsafe();
+        }
+    }
+
+    private void PersistUnsafe()
     {
         try { AtomicFile.WriteAllText(_logPath, JsonSerializer.Serialize(_log.ToList())); } catch { }
     }
 
-    /// <summary>递归文件计数:跳过 reparse point 防循环,无权限项跳过。</summary>
-    private static int CountFiles(string dir)
+    private static bool IsLinkCreated(string source)
     {
-        if (!Directory.Exists(dir)) return 0;
-        int count = 0;
+        if (File.Exists(source + ".junction")) return true; // 测试替身
+        try { return Directory.Exists(source) && (File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0; }
+        catch { return false; }
+    }
+
+    private static void EnsureFreeSpace(string targetRoot, long requiredBytes)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(targetRoot);
+            if (string.IsNullOrWhiteSpace(root)) return;
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady) throw new InvalidOperationException("目标盘不可用");
+            const long safetyMargin = 64L * 1024 * 1024;
+            var required = requiredBytes > long.MaxValue - safetyMargin ? long.MaxValue : requiredBytes + safetyMargin;
+            if (drive.AvailableFreeSpace < required)
+                throw new InvalidOperationException("目标盘可用空间不足");
+        }
+        catch (DriveNotFoundException) { throw new InvalidOperationException("目标盘不可用"); }
+        catch (UnauthorizedAccessException) { throw new InvalidOperationException("无法读取目标盘空间或权限不足"); }
+    }
+
+    private sealed record SnapshotInfo(long Bytes, int Files, bool IsComplete, int SkippedCount);
+
+    private static SnapshotInfo Snapshot(string dir, CancellationToken ct = default)
+    {
+        long bytes = 0;
+        int files = 0;
+        int skipped = 0;
+        bool complete = true;
         var stack = new Stack<string>();
         stack.Push(dir);
         while (stack.Count > 0)
         {
-            var d = stack.Pop();
-            IEnumerable<string> files;
-            try { files = Directory.EnumerateFiles(d); }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { continue; }
-            try { foreach (var _ in files) count++; }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { }
-
-            IEnumerable<string> subs;
-            try { subs = Directory.EnumerateDirectories(d); }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { continue; }
+            ct.ThrowIfCancellationRequested();
+            var current = stack.Pop();
+            IEnumerable<string> fileList;
+            try { fileList = Directory.EnumerateFiles(current, "*", new EnumerationOptions { IgnoreInaccessible = true }); }
+            catch { complete = false; skipped++; continue; }
             try
             {
-                foreach (var s in subs)
+                foreach (var file in fileList)
                 {
-                    try
-                    {
-                        if ((File.GetAttributes(s) & FileAttributes.ReparsePoint) != 0) continue;
-                        stack.Push(s);
-                    }
-                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { }
+                    ct.ThrowIfCancellationRequested();
+                    try { bytes = checked(bytes + new FileInfo(file).Length); files++; }
+                    catch { complete = false; skipped++; }
                 }
             }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { }
+            catch { complete = false; skipped++; }
+            IEnumerable<string> dirs;
+            try { dirs = Directory.EnumerateDirectories(current, "*", new EnumerationOptions { IgnoreInaccessible = true }); }
+            catch { complete = false; skipped++; continue; }
+            try
+            {
+                foreach (var child in dirs)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    try
+                    {
+                        if ((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
+                        { complete = false; skipped++; continue; }
+                        stack.Push(child);
+                    }
+                    catch { complete = false; skipped++; }
+                }
+            }
+            catch { complete = false; skipped++; }
         }
-        return count;
+        return new SnapshotInfo(bytes, files, complete, skipped);
     }
 
-    /// <summary>默认 runner:robocopy 直接跑进程;mklink 是 cmd 内建命令,经 cmd /c 调用。</summary>
+    private static void TryDeleteDirectory(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { }
+    }
+
     private static int DefaultRunner(string[] args)
     {
         var psi = new ProcessStartInfo
@@ -212,18 +389,22 @@ public class MigrationService
         {
             psi.FileName = "cmd";
             psi.ArgumentList.Add("/c");
-            foreach (var a in args) psi.ArgumentList.Add(a);
+            foreach (var arg in args) psi.ArgumentList.Add(arg);
         }
         else
         {
             psi.FileName = args[0];
-            foreach (var a in args.Skip(1)) psi.ArgumentList.Add(a);
+            foreach (var arg in args.Skip(1)) psi.ArgumentList.Add(arg);
         }
-        using var p = Process.Start(psi)!;
-        // 先排空 stdout/stderr 再等退出:否则子进程写满管道缓冲区会阻塞,WaitForExit 死锁
-        var drainOut = p.StandardOutput.ReadToEndAsync();
-        var drainErr = p.StandardError.ReadToEndAsync();
-        p.WaitForExit();
-        return p.ExitCode;
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException($"无法启动 {args[0]}");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        Task.WaitAll(output, error);
+        return process.ExitCode;
     }
 }
+
+
+
+

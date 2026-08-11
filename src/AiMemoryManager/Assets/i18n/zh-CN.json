@@ -117,7 +117,7 @@
   "Dash.Trigger.Manual": "手动", "Dash.Trigger.RuleThreshold": "阈值规则",
   "Dash.Trigger.RuleTimer": "定时规则", "Dash.Trigger.Tray": "托盘", "Dash.Trigger.Analysis": "智能分析", "Dash.Trigger.Conversation": "对话",
   "Nav.CSlim": "C 盘瘦身",
-  "Slim.Scan": "扫描占用", "Slim.Scanning": "扫描中…", "Slim.Size": "大小", "Slim.Category": "类别",
+  "Slim.Scan": "扫描占用", "Slim.CancelScan": "取消扫描", "Slim.ScanProgress": "扫描进度", "Slim.Scanning": "扫描中…", "Slim.Size": "大小", "Slim.Category": "类别",
   "Slim.FileCount": "文件数",
   "Slim.Analyze": "LLM 分析", "Slim.NoProfile": "请先配置大模型", "Slim.Advice": "分析建议",
   "Slim.Cleanable": "可清理项", "Slim.Migratable": "可迁移项", "Slim.Reason": "理由", "Slim.EstFree": "预估释放",
@@ -139,3 +139,4 @@
   "Analysis.SelectAll": "全选可执行建议", "Analysis.ClearSelection": "取消全选", "Analysis.SelectSuggestion": "选择该建议", "Analysis.SelectedCount": "已选择 {0}/{1} 项可执行建议", "Analysis.BatchTitle": "智能处理确认", "Analysis.BatchConfirm": "将按大模型方案处理：压缩 {0} 个进程，结束 {1} 个进程。结束进程还会显示明细确认。继续吗？", "Analysis.BatchExecute": "按方案处理", "Analysis.BatchProcessing": "正在按方案处理…", "Analysis.BatchExecuted": "智能处理完成：释放 {0} MB，压缩处理 {1} 项，结束进程成功 {2} 项，失败 {3} 项", "Analysis.BatchNoSelection": "请先勾选至少一项可执行建议", "Analysis.BatchNoTargets": "勾选的进程已退出或受到保护，没有可执行目标", "Analysis.BatchFailed": "智能处理失败：{0}",
   "Processes.Col.Signature": "数字签名", "Processes.Signature.Signed": "已签名", "Processes.Signature.Unsigned": "未签名", "Processes.Signature.Unknown": "未知"
 }
+

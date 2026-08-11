@@ -3,67 +3,92 @@ using AiMemoryManager.Models;
 
 namespace AiMemoryManager.Services;
 
-/// <summary>
-/// 清理候选清单(FR-12.1):Temp、浏览器缓存、回收站、用户目录一级文件夹。
-/// 所有候选先经 SystemPathGuard 硬白名单过滤;Windows Update 缓存受 FR-12.5 保护,不纳入。
-/// </summary>
+/// <summary>发现默认安全候选，不把用户目录一级目录直接当作可删除项。</summary>
 public class DiskCandidateProvider
 {
     public IReadOnlyList<DiskCandidate> GetCandidates()
     {
         var list = new List<DiskCandidate>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // %TEMP%
-        AddIfExists(list, Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), DiskCategory.Temp);
+        // 临时目录按一级子目录拆分，避免把正在使用的整个 TEMP 根目录移入回收站。
+        AddTempChildren(list, seen, Path.GetTempPath());
 
-        // 浏览器缓存:Chrome / Edge
-        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        AddIfExists(list, Path.Combine(local, @"Google\Chrome\User Data\Default\Cache"), DiskCategory.BrowserCache);
-        AddIfExists(list, Path.Combine(local, @"Microsoft\Edge\User Data\Default\Cache"), DiskCategory.BrowserCache);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        AddIfExists(list, seen, Path.Combine(local, @"Google\Chrome\User Data\Default\Cache"), DiskCategory.BrowserCache, canClean: true);
+        AddIfExists(list, seen, Path.Combine(local, @"Microsoft\Edge\User Data\Default\Cache"), DiskCategory.BrowserCache, canClean: true);
+        AddIfExists(list, seen, Path.Combine(local, @"Mozilla\Firefox\Profiles"), DiskCategory.BrowserCache, canClean: true);
 
-        // 回收站:访问失败时 MeasureAsync 自然得 0,UI 可忽略 0 项
-        string sysRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.System))!;
-        Add(list, Path.Combine(sysRoot, "$Recycle.Bin"), DiskCategory.RecycleBin);
+        // 回收站只作为统计分类，不对 $Recycle.Bin 目录本身执行删除。
+        var sysRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.System));
+        if (!string.IsNullOrEmpty(sysRoot))
+            AddIfExists(list, seen, Path.Combine(sysRoot, "$Recycle.Bin"), DiskCategory.RecycleBin, canClean: false);
 
-        // %USERPROFILE% 一级目录(Downloads/Documents/Desktop/Pictures/Videos/Music/AppData 等),
-        // 只列存在者,大小由 DiskScanService 统一测量,UI 量完按大小排序展示 Top15
-        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        // 惰性枚举:异常发生在 MoveNext,因此用 IgnoreInaccessible + try 包住整个迭代
-        IEnumerable<string> firstLevel;
-        try { firstLevel = Directory.EnumerateDirectories(profile, "*", EnumOptions); }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { firstLevel = Enumerable.Empty<string>(); }
-        try
+        // 用户数据目录只作为迁移候选，禁止默认清理；跳过 AppData、链接和当前应用目录。
+        var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        foreach (var name in new[] { "Downloads", "Documents", "Desktop", "Pictures", "Videos", "Music" })
         {
-            foreach (var d in firstLevel)
-            {
-                try
-                {
-                    if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;   // 跳过 junction(如 "Application Data")
-                }
-                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { continue; }
-                Add(list, d, DiskCategory.UserFolder);
-            }
+            var path = Path.Combine(profile, name);
+            AddIfExists(list, seen, path, DiskCategory.UserFolder, canMigrate: true);
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { /* 枚举中途失败,返回已收集项 */ }
-
+        AddOptionalUserFolders(list, seen, profile);
         return list;
     }
 
-    private static readonly EnumerationOptions EnumOptions = new()
+    private static readonly EnumerationOptions Options = new()
     {
         IgnoreInaccessible = true,
         AttributesToSkip = 0,
         RecurseSubdirectories = false,
     };
 
-    private static void AddIfExists(List<DiskCandidate> list, string path, DiskCategory category)
+    private static void AddTempChildren(List<DiskCandidate> list, HashSet<string> seen, string tempRoot)
     {
-        if (Directory.Exists(path)) Add(list, path, category);
+        if (!Directory.Exists(tempRoot)) return;
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(tempRoot, "*", Options))
+                AddIfExists(list, seen, dir, DiskCategory.Temp, canClean: true);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { }
     }
 
-    private static void Add(List<DiskCandidate> list, string path, DiskCategory category)
+    private static void AddOptionalUserFolders(List<DiskCandidate> list, HashSet<string> seen, string profile)
     {
-        if (SystemPathGuard.IsProtected(path)) return;   // 硬白名单兜底
-        list.Add(new DiskCandidate(path, category));
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(profile, "*", Options))
+            {
+                var name = Path.GetFileName(dir);
+                if (string.Equals(name, "AppData", StringComparison.OrdinalIgnoreCase) ||
+                    name is "Downloads" or "Documents" or "Desktop" or "Pictures" or "Videos" or "Music") continue;
+                try
+                {
+                    if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) continue;
+                    if (SystemPathGuard.IsProtected(dir)) continue;
+                    AddIfExists(list, seen, dir, DiskCategory.UserFolder, canMigrate: true);
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { }
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { }
+    }
+
+    private static void AddIfExists(List<DiskCandidate> list, HashSet<string> seen, string path,
+        DiskCategory category, bool canClean = false, bool canMigrate = false)
+    {
+        if (!Directory.Exists(path)) return;
+        var full = PathSafetyService.Normalize(path);
+        if (full is null || !seen.Add(full)) return;
+        if (PathSafetyService.IsReparsePoint(full)) return;
+        if (SystemPathGuard.IsProtected(full)) return;
+        if (canClean && !PathSafetyService.IsSafeCleanCandidate(full, category)) return;
+        if (canMigrate && !PathSafetyService.IsSafeMigrationCandidate(full, category)) return;
+        list.Add(new DiskCandidate(full, category)
+        {
+            Source = "LocalRules",
+            CanClean = canClean,
+            CanMigrate = canMigrate,
+        });
     }
 }

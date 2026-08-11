@@ -3,101 +3,188 @@ using AiMemoryManager.Models;
 
 namespace AiMemoryManager.Services;
 
-/// <summary>
-/// 磁盘扫描(FR-12.1):迭代栈遍历测量候选目录大小。
-/// 跳过 reparse point / junction 防循环;无权限路径跳过而非失败。
-/// </summary>
+/// <summary>异步、可取消、容错的候选目录扫描服务。</summary>
 public class DiskScanService
 {
     public Task<FolderSizeInfo> MeasureAsync(string path, DiskCategory category, CancellationToken ct = default)
         => Task.Run(() => Measure(path, category, ct), ct);
 
-    /// <summary>批量测量,串行执行避免磁盘 IO 抖动;单个失败不影响其它项。</summary>
+    /// <summary>兼容旧调用：批量测量，单项失败仍返回零结果。</summary>
     public async Task<IReadOnlyList<FolderSizeInfo>> ScanAsync(IEnumerable<DiskCandidate> candidates, CancellationToken ct = default)
     {
-        var list = new List<FolderSizeInfo>();
-        foreach (var c in candidates)
+        var result = await ScanDetailedAsync(candidates, null, ct);
+        return result.Items;
+    }
+
+    public async Task<DiskScanResult> ScanDetailedAsync(
+        IEnumerable<DiskCandidate> candidates,
+        IProgress<DiskScanProgress>? progress = null,
+        CancellationToken ct = default)
+    {
+        var started = DateTimeOffset.Now;
+        var source = candidates.DistinctBy(c => c.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        var items = new List<FolderSizeInfo>(source.Count);
+        var issues = new List<DiskScanIssue>();
+        bool canceled = false;
+        DiskSpaceSummary? space = null;
+
+        try
         {
-            ct.ThrowIfCancellationRequested();
+            progress?.Report(new DiskScanProgress("准备扫描", null, 0, source.Count));
+            space = GetSpaceSummary();
+        }
+        catch (Exception ex)
+        {
+            issues.Add(new DiskScanIssue("C:\\", $"无法读取 C 盘空间：{ex.Message}"));
+        }
+
+        for (int i = 0; i < source.Count; i++)
+        {
+            var candidate = source[i];
             try
             {
-                list.Add(await MeasureAsync(c.Path, c.Category, ct));
+                ct.ThrowIfCancellationRequested();
+                progress?.Report(new DiskScanProgress("正在测量", candidate.Path, i, source.Count));
+                var measured = await MeasureAsync(candidate.Path, candidate.Category, ct);
+                items.Add(measured with
+                {
+                    CanClean = candidate.CanClean,
+                    CanMigrate = candidate.CanMigrate,
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                canceled = true;
+                break;
             }
             catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
             {
-                // 单个候选失败不致命:跳过,继续测量其余候选
+                issues.Add(new DiskScanIssue(candidate.Path, DescribeScanError(ex), ex is UnauthorizedAccessException));
+                items.Add(new FolderSizeInfo(candidate.Path, candidate.Category, 0, 0)
+                {
+                    CanClean = candidate.CanClean,
+                    CanMigrate = candidate.CanMigrate,
+                    IsPartial = true,
+                    SkippedCount = 1,
+                    SkipReason = DescribeScanError(ex),
+                });
             }
         }
-        return list;
+
+        progress?.Report(new DiskScanProgress(canceled ? "扫描已取消" : "扫描完成", null,
+            items.Count, source.Count, true));
+        return new DiskScanResult(items, issues, space, canceled, started, DateTimeOffset.Now);
+    }
+
+    private static string DescribeScanError(Exception ex) => ex switch
+    {
+        UnauthorizedAccessException => "没有访问权限，已跳过",
+        PathTooLongException => "路径过长，已跳过",
+        IOException => "文件在扫描期间不可用，已跳过",
+        _ => "访问失败，已跳过"
+    };
+
+    private static DiskSpaceSummary GetSpaceSummary()
+    {
+        var systemRoot = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.System));
+        if (string.IsNullOrWhiteSpace(systemRoot)) systemRoot = Path.GetPathRoot(Environment.SystemDirectory);
+        if (string.IsNullOrWhiteSpace(systemRoot)) throw new IOException("找不到系统盘");
+        var drive = new DriveInfo(systemRoot);
+        if (!drive.IsReady) throw new IOException("系统盘不可用");
+        var total = drive.TotalSize;
+        var free = drive.AvailableFreeSpace;
+        return new DiskSpaceSummary(drive.Name, total, Math.Max(0, total - free), free, DateTimeOffset.Now);
     }
 
     private static readonly EnumerationOptions ScanOptions = new()
     {
         IgnoreInaccessible = true,
-        AttributesToSkip = 0,   // 不按属性过滤,保持与原先无选项枚举一致的口径
+        AttributesToSkip = 0,
         RecurseSubdirectories = false,
     };
 
-    /// <summary>枚举钩子:可重写以模拟枚举期异常(惰性枚举的异常发生在 MoveNext)。</summary>
+    /// <summary>枚举钩子:测试可模拟 MoveNext 期间异常。</summary>
     protected virtual IEnumerable<string> EnumerateFiles(string dir)
         => Directory.EnumerateFiles(dir, "*", ScanOptions);
 
-    /// <summary>枚举钩子:可重写以模拟枚举期异常(惰性枚举的异常发生在 MoveNext)。</summary>
+    /// <summary>枚举钩子:测试可模拟 MoveNext 期间异常。</summary>
     protected virtual IEnumerable<string> EnumerateDirectories(string dir)
         => Directory.EnumerateDirectories(dir, "*", ScanOptions);
 
     private FolderSizeInfo Measure(string path, DiskCategory category, CancellationToken ct)
     {
+        var normalized = PathSafetyService.Normalize(path) ?? path;
         long size = 0;
-        int count = 0;
-        if (!Directory.Exists(path)) return new FolderSizeInfo(path, category, 0, 0);
+        int fileCount = 0;
+        int dirCount = 0;
+        int skipped = 0;
+        DateTimeOffset? lastWrite = null;
+        bool partial = false;
+        if (!Directory.Exists(normalized))
+            return new FolderSizeInfo(normalized, category, 0, 0);
 
         var stack = new Stack<string>();
-        stack.Push(path);
+        stack.Push(normalized);
         while (stack.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
             var dir = stack.Pop();
+            dirCount++;
 
-            // 惰性枚举:IgnoreInaccessible 跳过无权限项;try 包住整个 foreach,
-            // 因为异常实际发生在 MoveNext(如扫描中途目录被删),仅包住调用点无效。
             IEnumerable<string> files;
             try { files = EnumerateFiles(dir); }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { continue; }
-
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+            { skipped++; partial = true; continue; }
             try
             {
                 foreach (var f in files)
                 {
+                    ct.ThrowIfCancellationRequested();
                     try
                     {
-                        size += new FileInfo(f).Length;
-                        count++;
+                        var info = new FileInfo(f);
+                        size = checked(size + info.Length);
+                        fileCount++;
+                        var write = info.LastWriteTimeUtc;
+                        if (lastWrite is null || write > lastWrite.Value.UtcDateTime) lastWrite = write;
                     }
-                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 跳过单文件 */ }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+                    { skipped++; partial = true; }
                 }
             }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 枚举中途失败,继续子目录 */ }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+            { skipped++; partial = true; }
 
             IEnumerable<string> subDirs;
             try { subDirs = EnumerateDirectories(dir); }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { continue; }
-
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+            { skipped++; partial = true; continue; }
             try
             {
                 foreach (var d in subDirs)
                 {
+                    ct.ThrowIfCancellationRequested();
                     try
                     {
-                        // 跳过符号链接/联接点,避免循环与重复计量
-                        if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0) continue;
+                        if ((File.GetAttributes(d) & FileAttributes.ReparsePoint) != 0)
+                        { skipped++; partial = true; continue; }
                         stack.Push(d);
                     }
-                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 跳过 */ }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+                    { skipped++; partial = true; }
                 }
             }
-            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException) { /* 枚举中途失败,继续栈中剩余目录 */ }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or PathTooLongException)
+            { skipped++; partial = true; }
         }
-        return new FolderSizeInfo(path, category, size, count);
+
+        return new FolderSizeInfo(normalized, category, size, fileCount)
+        {
+            DirectoryCount = dirCount,
+            LastWriteTimeUtc = lastWrite,
+            IsPartial = partial,
+            SkippedCount = skipped,
+            SkipReason = partial ? "部分文件或目录无法访问，已跳过" : null,
+        };
     }
 }
