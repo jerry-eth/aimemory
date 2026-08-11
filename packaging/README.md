@@ -42,6 +42,16 @@ $env:AMM_TEST_CERT_PASSWORD = "只用于本机验证的临时密码"
 
 然后在目标设备上**以管理员身份**将对应 `.cer` 导入“本地计算机\受信任的根证书颁发机构”，再双击 MSIX 安装。例如（管理员 PowerShell）：`Import-Certificate -FilePath .\\artifacts\\certs\\AiMemoryManager-Test.cer -CertStoreLocation Cert:\\LocalMachine\\Root`。仅导入当前用户证书存储可能导致 `0x800B0109`，无法通过 AppX 部署信任校验。复制到其他设备时只复制 `.msix` 和 `.cer`，不要复制包含私钥的 `.pfx`。开发证书不能用于商店发布。
 
+## 生成无需证书的开源便携版
+
+MSIX 需要签名证书；如果不希望处理证书，可以分发自包含 ZIP 便携版。该版本无需安装，解压后直接运行，适合开源项目和跨设备测试：
+
+```powershell
+.\packaging\build-portable.ps1 -Version 1.0.0.7 -Runtime win-x64
+```
+
+输出：`artifacts/portable/AiMemoryManager_1.0.0.7_portable_win-x64.zip`。
+便携版不提供 MSIX 的快捷方式、自动更新和商店集成；正式发布前仍应提供开源许可证文件（例如 MIT 或 Apache-2.0）。
 ## Store 提交前必须替换的内容
 
 - 使用 Partner Center 分配的 `Identity Name`、`Publisher` 和正式版本号。
