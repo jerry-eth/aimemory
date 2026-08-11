@@ -85,4 +85,28 @@ public class OpenAiCompatibleClientTests
         Assert.Equal(new[] { "deepseek-v4-flash", "deepseek-v4-pro" }, models);
         Assert.Equal("https://api.test/v1/models", handler.LastRequest!.RequestUri!.ToString());
     }
+
+    [Fact]
+    public async Task 请求超过配置超时会给出明确提示()
+    {
+        var client = new OpenAiCompatibleClient(new DelayedHandler(), TimeSpan.FromMilliseconds(100));
+        var ex = await Assert.ThrowsAsync<TimeoutException>(() => client.ChatAsync(Profile(), "s", "u"));
+
+        Assert.Contains("LLM 请求超过", ex.Message);
+    }
+
+    [Fact]
+    public void 默认超时时间超过一分钟()
+    {
+        Assert.True(OpenAiCompatibleClient.DefaultTimeout > TimeSpan.FromMinutes(1));
+    }
+
+    private sealed class DelayedHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Json("{}");
+        }
+    }
 }

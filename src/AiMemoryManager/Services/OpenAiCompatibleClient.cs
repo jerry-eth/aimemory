@@ -8,10 +8,20 @@ namespace AiMemoryManager.Services;
 
 public class OpenAiCompatibleClient : ILlmClient
 {
-    private readonly HttpClient _http;
+    /// <summary>LLM 生成可能较慢，默认允许最多等待 5 分钟，避免 60 秒硬超时。</summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
 
-    public OpenAiCompatibleClient(HttpMessageHandler? handler = null)
-        => _http = new HttpClient(handler ?? new HttpClientHandler()) { Timeout = TimeSpan.FromSeconds(60) };
+    private readonly HttpClient _http;
+    private readonly TimeSpan _timeout;
+
+    public OpenAiCompatibleClient(HttpMessageHandler? handler = null, TimeSpan? timeout = null)
+    {
+        _timeout = timeout ?? DefaultTimeout;
+        if (_timeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout), "LLM 请求超时时间必须大于 0。");
+
+        _http = new HttpClient(handler ?? new HttpClientHandler()) { Timeout = _timeout };
+    }
 
     public async Task<LlmResponse> ChatAsync(LlmProfile profile, string systemPrompt, string userPrompt, CancellationToken ct = default)
     {
@@ -28,7 +38,7 @@ public class OpenAiCompatibleClient : ILlmClient
         };
         req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-        using var resp = await _http.SendAsync(req, ct);
+        using var resp = await SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
             throw new HttpRequestException($"LLM API 错误 {(int)resp.StatusCode}: {Truncate(body, 300)}");
@@ -47,7 +57,7 @@ public class OpenAiCompatibleClient : ILlmClient
     public async Task<IReadOnlyList<string>> ListModelsAsync(LlmProfile profile, CancellationToken ct = default)
     {
         using var req = BuildRequest(profile, HttpMethod.Get, Base(profile.BaseUrl) + "/models");
-        using var resp = await _http.SendAsync(req, ct);
+        using var resp = await SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
             throw new HttpRequestException($"LLM API 错误 {(int)resp.StatusCode}: {Truncate(body, 300)}");
@@ -55,6 +65,19 @@ public class OpenAiCompatibleClient : ILlmClient
         return doc.RootElement.GetProperty("data").EnumerateArray()
             .Select(m => m.GetProperty("id").GetString()!)
             .ToList();
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        try
+        {
+            return await _http.SendAsync(request, ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            var seconds = Math.Round(_timeout.TotalSeconds);
+            throw new TimeoutException($"LLM 请求超过 {seconds:0} 秒仍未返回，请稍后重试或检查模型服务。");
+        }
     }
 
     private static HttpRequestMessage BuildRequest(LlmProfile profile, HttpMethod method, string url)
