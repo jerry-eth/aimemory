@@ -40,7 +40,7 @@ $env:AMM_TEST_CERT_PASSWORD = "只用于本机验证的临时密码"
   -CertificatePassword $env:AMM_TEST_CERT_PASSWORD
 ```
 
-然后将对应 `.cer` 导入当前用户或本机的“受信任的根证书颁发机构”证书存储，再双击 MSIX 安装。例如：`Import-Certificate -FilePath .\\artifacts\\certs\\AiMemoryManager-Test.cer -CertStoreLocation Cert:\\CurrentUser\\Root`。开发证书不能用于商店发布。
+然后在目标设备上**以管理员身份**将对应 `.cer` 导入“本地计算机\受信任的根证书颁发机构”，再双击 MSIX 安装。例如（管理员 PowerShell）：`Import-Certificate -FilePath .\\artifacts\\certs\\AiMemoryManager-Test.cer -CertStoreLocation Cert:\\LocalMachine\\Root`。仅导入当前用户证书存储可能导致 `0x800B0109`，无法通过 AppX 部署信任校验。复制到其他设备时只复制 `.msix` 和 `.cer`，不要复制包含私钥的 `.pfx`。开发证书不能用于商店发布。
 
 ## Store 提交前必须替换的内容
 

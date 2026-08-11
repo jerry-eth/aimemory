@@ -51,7 +51,7 @@
 - Debug 构建：通过。
 - Release 构建：通过。
 - 全量测试：177 通过，2 跳过，0 失败（真实 LLM 集成测试因未配置密钥跳过）。
-- MSIX：已生成并使用 MakeAppx 解包校验，未签名自包含包位于 artifacts/msix/，该目录已被 .gitignore 排除。
+- MSIX：已生成并使用 MakeAppx 解包校验；自包含 win-x64 包位于 artifacts/msix/，当前工作区另生成了仅供跨设备测试的开发证书签名包（证书和私钥均被 .gitignore 排除），正式发布必须替换为商业签名证书。
 - 敏感信息审计：未发现 API Key、Token、密码、私钥或证书进入 Git 暂存范围。
 
 
