@@ -142,10 +142,10 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         var cancellationToken = monitorCts.Token;
         try
         {
-            await RefreshCoreAsync(cancellationToken);
+            await RefreshCoreAsync(cancellationToken, forceResort: false);
             using var timer = new PeriodicTimer(RefreshInterval);
             while (await timer.WaitForNextTickAsync(cancellationToken))
-                await RefreshCoreAsync(cancellationToken);
+                await RefreshCoreAsync(cancellationToken, forceResort: false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -164,17 +164,19 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>手动刷新仍可用,但与实时轮询共享门闩,不会并发枚举进程。</summary>
+    /// <summary>手动刷新等待门闩空出后强制执行并恢复内存降序;与实时轮询共享门闩,不会并发枚举进程。</summary>
     [RelayCommand(CanExecute = nameof(CanRefresh))]
-    private Task RefreshAsync() => RefreshCoreAsync(CancellationToken.None);
+    private Task RefreshAsync() => RefreshCoreAsync(CancellationToken.None, forceResort: true, waitForGate: true);
 
     private bool CanRefresh() => !IsRefreshing;
 
     partial void OnIsRefreshingChanged(bool value) => RefreshCommand.NotifyCanExecuteChanged();
 
-    private async Task RefreshCoreAsync(CancellationToken cancellationToken)
+    private async Task RefreshCoreAsync(CancellationToken cancellationToken, bool forceResort, bool waitForGate = false)
     {
-        if (!await _refreshGate.WaitAsync(0, cancellationToken)) return;
+        // 定时轮询在忙碌时直接跳过本次;用户手动触发(刷新/终止后)则排队等待,避免点了没反应
+        if (waitForGate) await _refreshGate.WaitAsync(cancellationToken);
+        else if (!await _refreshGate.WaitAsync(0, cancellationToken)) return;
         IsRefreshing = true;
         try
         {
@@ -196,7 +198,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
             }, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
-            ApplyRows(rows);
+            ApplyRows(rows, forceResort);
             RefreshKillLog();
             TerminateSelectedCommand.NotifyCanExecuteChanged();
             StatusText = "";
@@ -216,7 +218,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void ApplyRows(IReadOnlyList<ProcessRowData> rows)
+    internal void ApplyRows(IReadOnlyList<ProcessRowData> rows, bool forceResort)
     {
         var now = DateTimeOffset.Now;
         var incoming = rows.ToDictionary(r => r.Snapshot.Pid);
@@ -247,6 +249,23 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
                 {
                     Items.Add(CreateItem(row, now));
                 }
+            }
+        }
+
+        // 实时刷新原地更新不重排(避免行容器抖动);手动刷新时按最新快照恢复内存降序,
+        // 用 Move 而不是 Clear+Add,保留选中状态、滚动位置和行容器。
+        if (forceResort && Items.Count > 1)
+        {
+            var orderIndex = new Dictionary<int, int>(rows.Count);
+            for (int i = 0; i < rows.Count; i++) orderIndex[rows[i].Snapshot.Pid] = i;
+            for (int target = 0; target < Items.Count; target++)
+            {
+                int current = -1;
+                for (int j = target; j < Items.Count; j++)
+                {
+                    if (orderIndex.TryGetValue(Items[j].Pid, out var idx) && idx == target) { current = j; break; }
+                }
+                if (current > target) Items.Move(current, target);
             }
         }
 
@@ -285,7 +304,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
 
     private sealed record ProcessSample(TimeSpan CpuTime, DateTimeOffset Timestamp, string Name);
 
-    private sealed record ProcessRowData(
+    internal sealed record ProcessRowData(
         ProcessSnapshot Snapshot,
         bool IsExcluded,
         bool IsCritical,
@@ -319,7 +338,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
                 Locator.History.Record(new CleanHistoryEntry(
                     DateTimeOffset.Now, CleanLevel.L3, r.FreedBytes, ok, CleanTrigger.Manual));
             StatusText = string.Format(Locator.L10n["L3.Result"], ok, r.FreedBytes / (1 << 20), fail);
-            await RefreshCoreAsync(CancellationToken.None);
+            await RefreshCoreAsync(CancellationToken.None, forceResort: true, waitForGate: true);
         }
         catch (Exception ex)
         {
