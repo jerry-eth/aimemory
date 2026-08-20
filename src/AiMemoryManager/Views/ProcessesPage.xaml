@@ -37,7 +37,10 @@
             </StackPanel>
         </Grid>
         <!-- WPF-UI 4.3.0 不为原生 DataGrid 提供主题,这里只用 DynamicResource 画刷做最低限度适配 -->
+        <!-- MaxHeight:外层 NavigationView 内容区是 ScrollViewer(无限高度测量),不封顶会把页面
+             撑到上万像素,工具栏和后悔药卡都得出屏;封顶后表格走自身内部滚动条 -->
         <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" AutoGenerateColumns="False"
+                  MaxHeight="560"
                   IsReadOnly="True" CanUserAddRows="False" SelectionMode="Single" SelectionUnit="FullRow"
                   CanUserResizeColumns="True" CanUserReorderColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="All"

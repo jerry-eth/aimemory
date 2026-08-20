@@ -201,7 +201,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
             ApplyRows(rows, forceResort);
             RefreshKillLog();
             TerminateSelectedCommand.NotifyCanExecuteChanged();
-            StatusText = "";
+            // 注意:不要在这里清空 StatusText——终止/恢复的结果反馈应保留到下一个动作
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -364,8 +364,12 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
 
     private void RefreshKillLog()
     {
+        var records = Locator.KillLog.Records;
+        // 内容没变就不重建集合:1.5s 轮询下 Clear+Add 会把每条的视觉/自动化元素全部销毁重建,
+        // 既闪屏,也让屏幕阅读器/UIA 客户端手里的元素瞬间失效(KillRecord 是 record,值相等)
+        if (KillLogRecords.SequenceEqual(records)) return;
         KillLogRecords.Clear();
-        foreach (var r in Locator.KillLog.Records) KillLogRecords.Add(r);
+        foreach (var r in records) KillLogRecords.Add(r);
         OnPropertyChanged(nameof(HasKillLog));
         OnPropertyChanged(nameof(KillLogEmpty));
     }
