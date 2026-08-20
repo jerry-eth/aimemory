@@ -11,6 +11,13 @@ namespace AiMemoryManager.ViewModels;
 /// </summary>
 public partial class SettingsViewModel : ObservableObject
 {
+    public SettingsViewModel()
+    {
+        // FR-8.5 启动期降级也要有界面体现:启动注册被占用时(App.OnStartup 仅写 Debug 日志,
+        // 用户无感知),设置页打开即提示热键当前不生效;改键成功/失败后由 SetHotkey 覆盖此状态
+        _hotkeyFailed = !Locator.Hotkey.IsRegistered;
+    }
+
     /// <summary>语言下拉框选中索引:0=跟随系统,1=中文,2=English。</summary>
     public int LanguageIndex
     {

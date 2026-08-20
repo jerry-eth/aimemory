@@ -494,6 +494,11 @@ void TestAnimations()
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 static extern bool GetCursorPos(out System.Drawing.Point lpPoint);
 
+[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
 [System.Runtime.InteropServices.DllImport("shell32.dll")]
 static extern int SHQueryUserNotificationState(out int state);
 
@@ -1429,6 +1434,247 @@ AutomationElement? FindToggleNear(AutomationElement window, string label)
                  && e.BoundingRectangle.X > lab.BoundingRectangle.X)
         .OrderBy(e => e.BoundingRectangle.X)
         .FirstOrDefault();
+}
+
+// ---------- 测试:M3 第 4.3 节 热键占用降级 ----------
+// 4.3 方法论:RegisterHotKey 命中的组合被 OS 拦截、WM_HOTKEY 直接投给注册线程,
+// 前台应用的焦点控件根本收不到该键——「占用时往设置框敲该组合」在现实世界不可达。
+// 可自动化验证的真实路径是启动期降级:热键被占用时启动 → 不崩溃、静默不注册、
+// 设置页出现「热键注册失败」提示;解除占用重启后热键恢复。
+void TestHotkeyDegrade()
+{
+    const string T = "M3-热键占用降级";
+    const int occId = 0x51AC;
+    var settingsPath = SettingsPath();
+    var backup = File.ReadAllText(settingsPath);
+    bool occupied = false;
+
+    void KillApp() { foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill(); Thread.Sleep(1500); }
+    void StartApp()
+    {
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        Thread.Sleep(4000);
+    }
+    bool HasHistorySince(DateTimeOffset since, int trigger)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(HistoryPath()));
+            foreach (var e in doc.RootElement.EnumerateArray())
+                if (e.GetProperty("Trigger").GetInt32() == trigger
+                    && e.GetProperty("Time").GetDateTimeOffset() >= since)
+                    return true;
+        }
+        catch { }
+        return false;
+    }
+
+    try
+    {
+        // 前置:应用运行中先验证本会话键盘输入链路可用(全局热键能触发一次手动清理)
+        if (Process.GetProcessesByName("AiMemoryManager").Length == 0) StartApp();
+        var (automation0, window0) = Attach();
+        using (automation0)
+        {
+            if (window0 == null) { Fail(T, "前置:应用窗口未找到"); return; }
+            var t0 = DateTimeOffset.Now;
+            SendCombo(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL,
+                      FlaUI.Core.WindowsAPI.VirtualKeyShort.SHIFT,
+                      FlaUI.Core.WindowsAPI.VirtualKeyShort.KEY_M);
+            if (!WaitNewHistoryEntry(t0, 0, 30))
+            { Fail(T, "本会话键盘输入不可用(Ctrl+Shift+M 全局热键未触发),4.3 无法自动验证"); return; }
+        }
+        Console.WriteLine("[diag] 前置:全局热键触发 ✓,键盘输入可用");
+
+        // 占住应用当前热键 Ctrl+Shift+M(modifiers=6, vk=0x4D),模拟被别的程序先注册。
+        // 必须先杀应用再注册:应用活着时它自己持有该组合,注册必然失败
+        KillApp();
+        if (!RegisterHotKey(IntPtr.Zero, occId, 0x0002 | 0x0004 /*MOD_CONTROL|MOD_SHIFT*/, 0x4D /*M*/))
+        { Fail(T, "测试自身注册 Ctrl+Shift+M 失败(可能已被占用),无法做占用实验"); return; }
+        occupied = true;
+        StartApp();
+        var (automation, window) = Attach();
+        using (automation)
+        {
+            if (window == null) { Fail(T, "热键被占用时应用未能启动出窗口(崩溃?)"); return; }
+            ShowWindow((IntPtr)window.Properties.NativeWindowHandle, 3);
+            Thread.Sleep(500);
+
+            // 1) 界面有体现:设置页出现「热键注册失败」降级提示(启动注册失败 → HotkeyFailed)
+            bool onSettings = false;
+            for (int i = 0; i < 3 && !onSettings; i++)
+            {
+                NavTo(window, "设置");
+                onSettings = RetryFind(() => FindTextStarting(window, "全局热键"), 6000) != null;
+            }
+            if (!onSettings) { Fail(T, "设置页未加载出热键卡"); return; }
+            if (RetryFind(() => FindTextStarting(window, "热键注册失败"), 6000) == null)
+            { Fail(T, "启动注册被占用后设置页无降级提示"); return; }
+            Console.WriteLine("[diag] 4.3 启动期降级:设置页出现「热键注册失败」提示 ✓");
+
+            // 2) 静默降级:按下被占用的组合,不产生手动清理记录(组合被 OS 投给占用方,应用未注册)
+            var t1 = DateTimeOffset.Now;
+            SendCombo(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL,
+                      FlaUI.Core.WindowsAPI.VirtualKeyShort.SHIFT,
+                      FlaUI.Core.WindowsAPI.VirtualKeyShort.KEY_M);
+            Thread.Sleep(8000);
+            if (HasHistorySince(t1, 0)) { Fail(T, "热键被占用却仍触发了清理,降级未生效"); return; }
+            Console.WriteLine("[diag] 4.3 占用期间热键不生效(静默降级) ✓");
+
+            // 3) 不崩溃且其它功能正常:仪表盘一键清理可用
+            bool onDash = false;
+            for (int i = 0; i < 3 && !onDash; i++)
+            {
+                NavTo(window, "仪表盘");
+                onDash = RetryFind(() => FindTextStarting(window, "一键清理"), 6000) != null;
+            }
+            if (!onDash) { Fail(T, "导航到仪表盘失败"); return; }
+            var t2 = DateTimeOffset.Now;
+            Trigger(RetryFind(() => window.FindFirstDescendant(cf =>
+                cf.ByName("一键清理").And(cf.ByControlType(ControlType.Button))), 5000));
+            if (!WaitNewHistoryEntry(t2, 0, 30)) { Fail(T, "热键降级后一键清理也不可用"); return; }
+            Console.WriteLine("[diag] 4.3 降级期间应用功能正常(一键清理 ✓),未崩溃");
+        }
+
+        // 4) 解除占用并重启 → 热键恢复
+        UnregisterHotKey(IntPtr.Zero, occId); occupied = false;
+        KillApp();
+        StartApp();
+        var t3 = DateTimeOffset.Now;
+        SendCombo(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL,
+                  FlaUI.Core.WindowsAPI.VirtualKeyShort.SHIFT,
+                  FlaUI.Core.WindowsAPI.VirtualKeyShort.KEY_M);
+        if (!WaitNewHistoryEntry(t3, 0, 30)) { Fail(T, "解除占用重启后热键未恢复"); return; }
+        Console.WriteLine("[diag] 4.3 解除占用后热键恢复 ✓");
+
+        // 5) 全程不得改动热键设置
+        var s = JsonDocument.Parse(File.ReadAllText(settingsPath)).RootElement;
+        if (s.GetProperty("HotkeyKey").GetInt32() != 77 /*M*/ || s.GetProperty("HotkeyModifiers").GetInt32() != 6)
+        { Fail(T, "降级过程中热键设置被改动"); return; }
+        Console.WriteLine("[diag] 4.3 热键设置未被改动 ✓");
+        Pass(T);
+    }
+    finally
+    {
+        if (occupied) UnregisterHotKey(IntPtr.Zero, occId);
+        // 恢复现场:确保应用以原设置在运行(若中途 Fail 退出,应用可能处于无热键/未启动状态)
+        if (File.ReadAllText(settingsPath) != backup) File.WriteAllText(settingsPath, backup);
+        if (Process.GetProcessesByName("AiMemoryManager").Length == 0)
+        {
+            StartApp();
+            Console.WriteLine("[OK] 已重启应用恢复现场");
+        }
+    }
+}
+
+// 7.1 扫描 → 结果按大小降序(大项在前);7.2 LLM 分析 → 出现可清理/可迁移建议及理由。
+// 删除/迁移/回退/占用检测涉及真实文件搬迁与回收站,留人工,不在此自动化。
+void TestCSlim()
+{
+    const string T = "M3-C盘瘦身";
+    if (Process.GetProcessesByName("AiMemoryManager").Length == 0)
+    {
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        Thread.Sleep(5000);
+    }
+    var (automation, window) = Attach();
+    using (automation)
+    {
+        if (window == null) { Fail(T, "应用窗口未找到"); return; }
+        ShowWindow((IntPtr)window.Properties.NativeWindowHandle, 3);
+        Thread.Sleep(500);
+
+        bool onPage = false;
+        for (int i = 0; i < 3 && !onPage; i++)
+        {
+            NavTo(window, "C 盘瘦身");
+            onPage = RetryFind(() => FindTextStarting(window, "扫描占用"), 6000) != null;
+        }
+        if (!onPage) { Fail(T, "C盘瘦身页未加载"); return; }
+
+        // ---- 7.1 扫描 → 结果按大小排序合理(大项在前) ----
+        var scanBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+            cf.ByName("扫描占用").And(cf.ByControlType(ControlType.Button))), 8000);
+        if (scanBtn == null) { Fail(T, "找不到扫描按钮"); return; }
+        Trigger(scanBtn);
+        Console.WriteLine("[diag] 已触发扫描,等待完成(最长 15 分钟,大用户目录实测约 10 分钟)…");
+        string? scanResult = null;
+        var sw = Stopwatch.StartNew();
+        while (sw.Elapsed < TimeSpan.FromMinutes(15))
+        {
+            if (FindTextStarting(window, "扫描完成") != null) { scanResult = "ok"; break; }
+            if (FindTextStarting(window, "扫描失败") != null) { scanResult = "fail"; break; }
+            if (FindTextStarting(window, "扫描已取消") != null) { scanResult = "cancel"; break; }
+            Thread.Sleep(3000);
+        }
+        if (scanResult != "ok")
+        { Fail(T, $"扫描未正常完成({scanResult ?? "超时"},状态='{FindTextStarting(window, "扫描")?.Name}')"); return; }
+        Console.WriteLine($"[diag] 扫描完成,耗时 {sw.Elapsed.TotalSeconds:0}s");
+
+        // 扫描结果表 = 带「文件数」列头的 DataGrid;虚拟化只实例化可见行,验证可见行降序即可证明大项在前
+        var grids = window.FindAllDescendants(cf => cf.ByControlType(ControlType.DataGrid));
+        var scanGrid = grids.FirstOrDefault(g => g.FindFirstDescendant(cf => cf.ByName("文件数")) != null);
+        if (scanGrid == null) { Fail(T, "找不到扫描结果表"); return; }
+        var rows = scanGrid.FindAllDescendants(cf => cf.ByControlType(ControlType.DataItem));
+        if (rows.Length == 0) { Fail(T, "扫描结果为空(本机 C 盘不应无候选项)"); return; }
+        var sizes = new List<long>();
+        foreach (var row in rows)
+        {
+            long size = -1;
+            foreach (var t in row.FindAllDescendants(cf => cf.ByControlType(ControlType.Text)))
+            {
+                var txt = t.Name.Trim();
+                long mult = txt.EndsWith("GB") ? 1L << 30 : txt.EndsWith("MB") ? 1L << 20
+                    : txt.EndsWith("KB") ? 1L << 10 : txt.EndsWith(" B") ? 1 : 0;
+                if (mult == 0) continue;
+                var num = txt[..txt.LastIndexOf(' ')].Trim();
+                if (double.TryParse(num, out var v)) { size = (long)(v * mult); break; }
+            }
+            if (size >= 0) sizes.Add(size);
+        }
+        Console.WriteLine($"[diag] 可见行 {rows.Length},解析到大小 {sizes.Count} 行,前三: "
+            + string.Join(", ", sizes.Take(3).Select(s => $"{s / (1 << 20)}MB")));
+        if (sizes.Count < 2) { Fail(T, "可见行中解析不出大小列,无法验证排序"); return; }
+        for (int i = 1; i < sizes.Count; i++)
+            if (sizes[i] > sizes[i - 1]) { Fail(T, $"结果未按大小降序:第{i}行 {sizes[i]} > 第{i - 1}行 {sizes[i - 1]}"); return; }
+        Console.WriteLine("[diag] 7.1 扫描结果按大小降序(大项在前) ✓");
+
+        // ---- 7.2 LLM 分析 → 出现瘦身建议(迁移/删除)及理由 ----
+        var analyzeBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+            cf.ByName("LLM 分析").And(cf.ByControlType(ControlType.Button))), 8000);
+        if (analyzeBtn == null) { Fail(T, "找不到 LLM 分析按钮"); return; }
+        Trigger(analyzeBtn);
+        Console.WriteLine("[diag] 已触发 LLM 分析,等待完成(最长 4 分钟)…");
+        var sw2 = Stopwatch.StartNew();
+        bool analyzing = true;
+        while (sw2.Elapsed < TimeSpan.FromMinutes(4))
+        {
+            if (FindTextStarting(window, "分析中") == null) { analyzing = false; break; }
+            Thread.Sleep(3000);
+        }
+        if (analyzing) { Fail(T, "LLM 分析 4 分钟未完成"); return; }
+        var srcEl = RetryFind(() => window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+            .FirstOrDefault(e => e.Name.Contains("本地规则") || e.Name == "Llm" || e.Name.StartsWith("大模型分析不可用")), 10000);
+        Console.WriteLine($"[diag] 建议来源: {srcEl?.Name ?? "(未读到)"}");
+
+        // 可清理表带「预估释放」列头,可迁移表带「目标盘」列头
+        var grids2 = window.FindAllDescendants(cf => cf.ByControlType(ControlType.DataGrid));
+        var cleanGrid = grids2.FirstOrDefault(g => g.FindFirstDescendant(cf => cf.ByName("预估释放")) != null);
+        var migGrid = grids2.FirstOrDefault(g => g.FindFirstDescendant(cf => cf.ByName("目标盘")) != null);
+        int cleanRows = cleanGrid?.FindAllDescendants(cf => cf.ByControlType(ControlType.DataItem)).Length ?? 0;
+        int migRows = migGrid?.FindAllDescendants(cf => cf.ByControlType(ControlType.DataItem)).Length ?? 0;
+        Console.WriteLine($"[diag] 建议行数: 可清理={cleanRows}, 可迁移={migRows}");
+        if (cleanRows + migRows == 0) { Fail(T, "LLM 分析未产生任何可清理/可迁移建议"); return; }
+        // 理由列非空抽查:建议行内除路径/大小外应还有理由文本
+        var firstRow = (cleanRows > 0 ? cleanGrid : migGrid)!
+            .FindAllDescendants(cf => cf.ByControlType(ControlType.DataItem)).First();
+        var cellTexts = firstRow.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+            .Select(e => e.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (cellTexts.Count < 2) { Fail(T, "建议行缺少理由列文本"); return; }
+        Console.WriteLine($"[diag] 首条建议: {string.Join(" | ", cellTexts.Select(x => x.Length > 40 ? x[..40] + "…" : x))}");
+        Console.WriteLine("[diag] 7.2 LLM 分析产生瘦身建议且带理由 ✓");
+        Pass(T);
+    }
 }
 
 void TestM3Quick()
@@ -2829,6 +3075,8 @@ void CloseStuckDialogs()
         if (mode == "autotrigger") TestAutoTrigger(); // 改设置+重启+内存压力,不进 all
         if (mode == "leak") TestLeakAlert();          // ~10min,真实 LLM API 调用,不进 all
         if (mode == "m3quick") TestM3Quick();         // 热键/通知/自启/历史截断,改设置+重启,不进 all
+        if (mode == "hotkeydegrade") { TestHotkeyDegrade(); return failures; }  // 4.3 热键占用降级
+        if (mode == "cslim") { TestCSlim(); return failures; }  // 7.1/7.2 C盘瘦身扫描+LLM建议,真实 LLM 调用,不进 all
         if (mode == "l3flow") TestL3Flow();           // L3 确认流/防误杀/历史,真实 LLM 调用,不进 all
     }
 }
