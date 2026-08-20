@@ -66,7 +66,12 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         HasProfile = Locator.Profiles.GetActive() is not null;
         RefreshLeakAlerts();
         Locator.Analysis.AnalysisCompleted += OnAnalysisCompleted;
+        // 泄漏告警即时上卡:否则告警发生后用户打开本页要等下一次分析完成才看得到告警行
+        Locator.LeakDetection.LeakDetected += OnLeakDetected;
     }
+
+    private void OnLeakDetected(object? s, LeakAlert a) =>
+        App.Current.Dispatcher.BeginInvoke(RefreshLeakAlerts);
 
     private void OnAnalysisCompleted(object? s, AnalysisResult r) =>
         App.Current.Dispatcher.BeginInvoke(() => ApplyResult(r));
@@ -467,5 +472,9 @@ public partial class SmartAnalysisViewModel : ObservableObject, IDisposable
         HasLeakAlerts = LeakAlerts.Count > 0;
     }
 
-    public void Dispose() => Locator.Analysis.AnalysisCompleted -= OnAnalysisCompleted;
+    public void Dispose()
+    {
+        Locator.Analysis.AnalysisCompleted -= OnAnalysisCompleted;
+        Locator.LeakDetection.LeakDetected -= OnLeakDetected;
+    }
 }

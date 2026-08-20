@@ -65,5 +65,28 @@ public class LeakDetectionService
         // 退出进程清轨
         foreach (var pid in _tracks.Keys.Where(k => !seen.Contains(k)).ToList())
             _tracks.Remove(pid);
+
+        // 诊断:AMM_LEAK_DEBUG=1 时把每跳的最大增长轨道写日志(E2E 自动化定位用)
+        if (Environment.GetEnvironmentVariable("AMM_LEAK_DEBUG") == "1")
+        {
+            try
+            {
+                var top = _tracks
+                    .Select(kv => (kv.Key, Growth: kv.Value.Samples.Count > 0
+                        ? kv.Value.Samples.Last!.Value.Bytes - kv.Value.Samples.First!.Value.Bytes : 0,
+                        Span: kv.Value.Samples.Count > 0
+                            ? kv.Value.Samples.Last!.Value.Time - kv.Value.Samples.First!.Value.Time
+                            : TimeSpan.Zero,
+                        kv.Value.Samples.Count))
+                    .OrderByDescending(x => x.Growth).FirstOrDefault();
+                var line = $"{now:HH:mm:ss} enabled={s.LeakDetectionEnabled} tracked={_tracks.Count} " +
+                           $"topPid={top.Key} topGrowth={top.Growth >> 20}MB span={top.Span:mm\\:ss} samples={top.Count} " +
+                           $"need=>({threshold >> 20}MB,{window:mm\\:ss}) alerts={_alerts.Count}";
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "AiMemoryManager", "leak-debug.log"), line + Environment.NewLine);
+            }
+            catch { /* 诊断日志不影响主流程 */ }
+        }
     }
 }

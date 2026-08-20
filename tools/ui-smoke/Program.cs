@@ -16,6 +16,8 @@ static extern IntPtr GetForegroundWindow();
 [System.Runtime.InteropServices.DllImport("user32.dll")]
 static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 [System.Runtime.InteropServices.DllImport("user32.dll")]
+static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
 static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
 bool ForceForeground(IntPtr hwnd)
@@ -848,6 +850,640 @@ void TestAnalysis()
     }
 }
 
+// ---------- 测试:压缩建议执行(M2 第 4 节) ----------
+// 起一个 200MB 标记进程 → 分析拿到建议 → 对标记进程点「立即压缩」→
+// 双重判定:状态文本「已释放 X MB」 + 标记进程 WorkingSet 实测大幅下降
+void TestCompress()
+{
+    const string T = "M2-4 压缩建议执行";
+    var markerPath = Path.Combine(Path.GetTempPath(), "uismokemarker.exe");
+    foreach (var p in Process.GetProcessesByName("uismokemarker")) try { p.Kill(); } catch { }
+    Thread.Sleep(1000);
+    File.Copy(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", markerPath, overwrite: true);
+    var marker = Process.Start(new ProcessStartInfo(markerPath,
+        "-NoProfile -Command \"$x = New-Object byte[] 200MB; for($i=0; $i -lt $x.Length; $i+=4096){ $x[$i]=1 }; Start-Sleep 600\"")
+    { UseShellExecute = false })!;
+    try
+    {
+        Thread.Sleep(5000);
+        var (automation, window) = Attach();
+        using (automation)
+        {
+            if (!NavTo(window, "智能分析")) { Fail(T, "导航失败"); return; }
+
+            // 「立即压缩」按钮在可视区外时 UIA 只暴露其 TextBlock 子节点(按钮本体不进树),
+            // 且 ScrollViewer CanContentScroll=False → 子元素不支持 ScrollItem;
+            // 所以先按 Text 找,用鼠标滚轮滚进可视区,再点文本中心。
+            // 行内进程名 = 同一水平线上能匹配真实进程名的最左文本。
+            (AutomationElement? Text, string? Proc) FindCompressTarget(string? preferProc = null)
+            {
+                var liveNames = Process.GetProcesses().Select(p => p.ProcessName.ToLowerInvariant()).ToHashSet();
+                foreach (var txt in window.FindAllDescendants(cf =>
+                    cf.ByName("立即压缩").And(cf.ByControlType(ControlType.Text))))
+                {
+                    var y = txt.BoundingRectangle.Y + txt.BoundingRectangle.Height / 2;
+                    var nameText = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                        .Where(e => Math.Abs(e.BoundingRectangle.Y + e.BoundingRectangle.Height / 2 - y) < 25
+                                 && e.BoundingRectangle.X < txt.BoundingRectangle.X
+                                 && liveNames.Contains(e.Name.ToLowerInvariant()))
+                        .OrderByDescending(e => preferProc != null && e.Name.Equals(preferProc, StringComparison.OrdinalIgnoreCase))
+                        .ThenByDescending(e => e.Name.Equals("uismokemarker", StringComparison.OrdinalIgnoreCase))
+                        .ThenBy(e => e.BoundingRectangle.X).FirstOrDefault();
+                    if (nameText != null)
+                        return (txt, nameText.Name);
+                }
+                return (null, null);
+            }
+
+            AutomationElement? compressTxt = null;
+            string? compressProc = null;
+            for (int attempt = 0; attempt < 3 && compressTxt == null; attempt++)
+            {
+                var btnName = attempt == 0 ? "开始分析" : "强制刷新";
+                var runBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                    cf.ByName(btnName).And(cf.ByControlType(ControlType.Button))));
+                if (runBtn == null) { Fail(T, $"找不到{btnName}按钮"); return; }
+                var prev = FindTextStarting(window, "本次消耗")?.Name;
+                Trigger(runBtn);
+                // 等分析完成:UsageText 变化
+                var sw = Stopwatch.StartNew();
+                while (sw.Elapsed < TimeSpan.FromSeconds(150))
+                {
+                    var u = FindTextStarting(window, "本次消耗")?.Name;
+                    if (u != null && u != prev) break;
+                    Thread.Sleep(1000);
+                }
+                Thread.Sleep(1500);   // 等建议卡渲染
+                var found = RetryFind(() => { var f = FindCompressTarget(); return f.Text != null ? f.Text : null; }, 8000);
+                if (found != null) (compressTxt, compressProc) = FindCompressTarget();
+                if (compressTxt == null)
+                {
+                    var status = FindTextStarting(window, "上次分析")?.Name
+                              ?? FindTextStarting(window, "分析")?.Name ?? "?";
+                    var txtCount = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                        .Count(b => b.Name.Contains("立即压缩"));
+                    Console.WriteLine($"[diag] 第{attempt + 1}次分析无可匹配压缩卡(状态: {status}, 「立即压缩」文本 {txtCount} 个),重试");
+                }
+            }
+            if (compressTxt == null || compressProc == null)
+            {
+                Console.WriteLine($"[WARN] {T}: LLM 连续 3 次未给出可匹配的压缩建议,需人工验证");
+                return;
+            }
+            Console.WriteLine($"[diag] 压缩目标: {compressProc}");
+
+            long wsBefore = Process.GetProcessesByName(compressProc).Sum(p => p.WorkingSet64);
+            // 该页 ScrollViewer CanContentScroll=False → 子元素没有 ScrollItem;改用页面
+            // ScrollViewer 的 ScrollPattern 按百分比滚动(不依赖前台/鼠标),再把窗口临时
+            // 置为 TopMost 保证鼠标点击落在本窗口(终端遮挡时 SetForegroundWindow 常被拒)
+            var hwndApp = (IntPtr)window.Properties.NativeWindowHandle;
+            // 页面上有多个 ScrollViewer(横向、内嵌卡片等),第一个不一定是装建议卡的那个;
+            // 从目标文本沿父链向上找其所在的 ScrollViewer,拿它的 ScrollPattern
+            AutomationElement? targetScroller = null;
+            for (var p = compressTxt.Parent; p != null && targetScroller == null; p = p.Parent)
+                if (p.ClassName == "ScrollViewer") targetScroller = p;
+            var allScrollers = window.FindAllDescendants(cf => cf.ByClassName("ScrollViewer"));
+            Console.WriteLine($"[diag] ScrollViewer 共 {allScrollers.Length} 个,目标所在: {(targetScroller != null)}");
+            foreach (var s in allScrollers)
+            {
+                var sp = s.Patterns.Scroll.PatternOrDefault;
+                Console.WriteLine($"[diag]   滚动器 rect={s.BoundingRectangle}, vScrollable={(sp?.VerticallyScrollable.ValueOrDefault.ToString() ?? "?")}, vView={(sp?.VerticalViewSize.ValueOrDefault.ToString("F0") ?? "?")}");
+            }
+            AutomationElement? visTxt = null;
+            bool Visible(AutomationElement e)
+            {
+                var wr = window.BoundingRectangle; var rr = e.BoundingRectangle;
+                return rr.Y > wr.Y + 40 && rr.Y + rr.Height < wr.Y + wr.Height - 10;
+            }
+            // 外 ScrollViewer 的内容只比窗口高几百像素,UIA 却报 vView=100/不可滚;
+            // 最简单的出路是最大化窗口让整张卡片露出来,再考虑滚动
+            ShowWindow(hwndApp, 3 /*SW_MAXIMIZE*/);
+            Thread.Sleep(1200);
+            {
+                var f = FindCompressTarget(compressProc);
+                if (f.Text != null && Visible(f.Text)) visTxt = f.Text;
+                Console.WriteLine($"[diag] 最大化后目标可见: {(visTxt != null)}, 窗口={window.BoundingRectangle}");
+            }
+            // 只有「目标所在」的滚动器真的可滚时才用 ScrollPattern;
+            // 目标在外层(报不可滚的)ScrollViewer 时,滚错滚动器目标纹丝不动,直接走滚轮
+            var targetScroll = targetScroller?.Patterns.Scroll.PatternOrDefault;
+            if (visTxt == null && targetScroll != null && targetScroll.VerticallyScrollable.ValueOrDefault)
+            {
+                for (double pct = 0; pct <= 100 && visTxt == null; pct += 10)
+                {
+                    try { targetScroll.SetScrollPercent(-1 /*ScrollPattern.NoScroll*/, pct); } catch (Exception ex) { Console.WriteLine($"[diag] SetScrollPercent({pct}) 异常: {ex.GetType().Name}"); }
+                    Thread.Sleep(500);
+                    var f = FindCompressTarget(compressProc);
+                    if (f.Text == null) { Console.WriteLine($"[diag] pct={pct}: 目标文本不在 UIA 树"); break; }
+                    var wr1 = window.BoundingRectangle; var rr1 = f.Text.BoundingRectangle;
+                    Console.WriteLine($"[diag] pct={pct}: 目标 Y={rr1.Y:F0}..{rr1.Y + rr1.Height:F0}, 窗口 Y={wr1.Y:F0}..{wr1.Y + wr1.Height:F0}, 实际vPct={targetScroll.VerticalScrollPercent.ValueOrDefault:F0}");
+                    if (Visible(f.Text)) visTxt = f.Text;
+                }
+            }
+            if (visTxt == null)
+            {
+                // 置前 + 鼠标滚轮下滚(滚轮事件落到光标所在窗口,与 UIA 可滚性无关)
+                SetWindowPos(hwndApp, (IntPtr)(-1) /*HWND_TOPMOST*/, 0, 0, 0, 0, 0x0003);
+                var wr = window.BoundingRectangle;
+                FlaUI.Core.Input.Mouse.Position = new System.Drawing.Point(
+                    (int)(wr.X + wr.Width / 2), (int)(wr.Y + wr.Height / 2));
+                Thread.Sleep(300);
+                for (int i = 0; i < 40 && visTxt == null; i++)
+                {
+                    FlaUI.Core.Input.Mouse.Scroll(-2);
+                    Thread.Sleep(400);
+                    var f = FindCompressTarget(compressProc);
+                    if (f.Text != null)
+                    {
+                        var rr2 = f.Text.BoundingRectangle;
+                        if (i % 5 == 0) Console.WriteLine($"[diag] 滚轮×{(i + 1) * 2}: 目标 Y={rr2.Y:F0}");
+                        if (Visible(f.Text)) visTxt = f.Text;
+                    }
+                }
+                SetWindowPos(hwndApp, (IntPtr)(-2) /*HWND_NOTOPMOST*/, 0, 0, 0, 0, 0x0003);
+            }
+            if (visTxt == null) { Fail(T, "无法把压缩卡滚进可视区"); return; }
+            SetWindowPos(hwndApp, (IntPtr)(-1) /*HWND_TOPMOST*/, 0, 0, 0, 0, 0x0003 /*NOMOVE|NOSIZE*/);
+            Thread.Sleep(300);
+            try { visTxt.Click(); }   // Click() 点元素中心;文本是按钮子节点,点它即点按钮
+            finally { SetWindowPos(hwndApp, (IntPtr)(-2) /*HWND_NOTOPMOST*/, 0, 0, 0, 0, 0x0003); }
+            if (RetryFind(() => FindTextStarting(window, "已释放"), 30000) == null)
+            { Fail(T, "压缩后无「已释放」提示"); return; }
+            Thread.Sleep(2000);
+            long wsAfter = Process.GetProcessesByName(compressProc).Sum(p => { p.Refresh(); return p.WorkingSet64; });
+            Console.WriteLine($"[diag] {compressProc} WS: {wsBefore >> 20}MB → {wsAfter >> 20}MB");
+            // 活跃进程被压缩后部分页面会立即换回,达不到减半;确认「明显下降」即可(≥10%)
+            if (wsAfter > wsBefore * 9 / 10) { Fail(T, "压缩后目标进程工作集未明显下降"); return; }
+            Pass(T);
+        }
+    }
+    finally { try { marker.Kill(); } catch { } }
+}
+
+// ---------- 测试:提示词模板(M2 第 5 节) ----------
+// 把整个模板换成「固定输出」覆盖模板(含四个变量占位符)→ 强制分析 → 建议理由带标记。
+// 注意:实测 DeepSeek 对「reason 加前缀」这类软指令不稳定遵守(直接 API 调用验证过),
+// 但「只输出指定 JSON」的硬覆盖指令稳定遵守,故用后者作为模板生效的判定信号;
+// 四个变量替换本身由 AnalysisPromptBuilderTests 单测覆盖。
+void TestPromptTemplate()
+{
+    const string T = "M2-5 提示词模板";
+    const string marker = "标A7x";
+    const string overrideTemplate = """
+        你是模板测试助手。当前系统内存状况:{memory_info}。进程列表:{process_list}。用户要求:{custom_instructions}。语言:{language}。
+        忽略其他一切考虑,无论进程状态如何,只输出如下 JSON(不得改动任何字符):
+        {"suggestions":[{"process":"uismokemarker","action":"keep","reason":"标A7x模板生效","risk":"low"}]}
+        """;
+    var (automation, window) = Attach();
+    using (automation)
+    {
+        if (!NavTo(window, "大模型")) { Fail(T, "导航到大模型页失败"); return; }
+        // 模板内容框:页面上最高的多行 Edit(Height=180),取 Y 最大的 Edit
+        var templateBox = RetryFind(() => FormEdits(window).OrderByDescending(e => e.BoundingRectangle.Y).First());
+        if (templateBox == null) { Fail(T, "找不到模板编辑框"); return; }
+        var origContent = templateBox.Patterns.Value.Pattern.Value.Value;
+        if (origContent.Contains(marker)) { Fail(T, "模板已含测试标记,先人工清理"); return; }
+
+        templateBox.Focus();
+        Thread.Sleep(200);
+        SetEditText(templateBox, overrideTemplate);
+        FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
+        Thread.Sleep(400);
+        // 模板卡的保存按钮是两个「保存」中 Y 更大的那个
+        var saveBtns = window.FindAllDescendants(cf => cf.ByName("保存").And(cf.ByControlType(ControlType.Button)))
+            .OrderByDescending(b => b.BoundingRectangle.Y).ToList();
+        if (saveBtns.Count < 2) { Fail(T, "找不到模板保存按钮"); return; }
+        Trigger(saveBtns[0]);
+        Thread.Sleep(800);
+        // 确认落盘
+        var promptsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "AiMemoryManager", "prompts.json");
+        if (!File.ReadAllText(promptsPath).Contains(marker)) { Fail(T, "模板未保存到 prompts.json"); return; }
+        Console.WriteLine("[diag] 模板标记已保存");
+
+        try
+        {
+            if (!NavTo(window, "智能分析")) { Fail(T, "导航到智能分析页失败"); return; }
+            // 模板变更 → 哈希变化 → 点开始分析即真实请求
+            var runBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                cf.ByName("开始分析").And(cf.ByControlType(ControlType.Button))));
+            if (runBtn == null) { Fail(T, "找不到开始分析按钮"); return; }
+            bool markerSeen = false;
+            for (int attempt = 0; attempt < 2 && !markerSeen; attempt++)
+            {
+                var prev = FindTextStarting(window, "本次消耗")?.Name;
+                Trigger(runBtn);
+                var sw = Stopwatch.StartNew();
+                while (sw.Elapsed < TimeSpan.FromSeconds(150))
+                {
+                    var u = FindTextStarting(window, "本次消耗")?.Name;
+                    if (u != null && u != prev) break;
+                    Thread.Sleep(1000);
+                }
+                // 建议卡理由文本中带标记
+                markerSeen = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                    .Any(e => e.Name.Contains(marker));
+                if (!markerSeen)
+                {
+                    var reasons = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                        .Select(e => e.Name).Where(n => n.Length > 8 && n.Length < 120
+                            && !n.Contains("本次消耗") && !n.Contains("Token") && !n.Contains("上次分析"))
+                        .Take(12);
+                    Console.WriteLine($"[diag] 第{attempt + 1}次分析理由未带标记,页面文本样本: {string.Join(" | ", reasons)}");
+                    runBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                        cf.ByName("强制刷新").And(cf.ByControlType(ControlType.Button)))) ?? runBtn;
+                }
+            }
+            if (!markerSeen) { Fail(T, "两次分析的建议理由均未带模板标记,模板未生效"); return; }
+            Console.WriteLine("[diag] 建议理由带模板标记 ✓");
+        }
+        finally
+        {
+            // 恢复出厂默认
+            if (!NavTo(window, "大模型")) { Console.WriteLine("[WARN] 恢复模板时导航失败"); }
+            else
+            {
+                var restoreBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                    cf.ByName("恢复出厂默认").And(cf.ByControlType(ControlType.Button))));
+                Trigger(restoreBtn);
+                Thread.Sleep(800);
+                bool restored = !File.ReadAllText(promptsPath).Contains(marker);
+                Console.WriteLine(restored ? "[OK] 模板已恢复出厂" : "[WARN] prompts.json 仍含测试标记");
+                if (!restored) failures++;
+            }
+        }
+        Pass(T);
+    }
+}
+
+// ---------- 测试:自动触发(M2 第 6 节) ----------
+// 6.1 阈值触发:settings 写 ThresholdPercent=40 + LlmThresholdTriggerEnabled=true + 每日上限 1,
+//     内存压力推过 45% → 调度器 60s tick 自动分析 → jsonl 新增 Trigger=1(Threshold)。
+// 6.2 每日上限:上限=1,撤压(占用回落重置触发位)再加压 → 不再自动分析(jsonl 无新增)。
+// 注:调度器到上限后静默跳过(与预算闸门一致),"提示/状态说明"以 jsonl 不新增为判定。
+void TestAutoTrigger()
+{
+    const string T = "M2-6 自动触发";
+    var settingsPath = SettingsPath();
+    var backup = File.ReadAllText(settingsPath);
+    List<byte[]> pressure = new();
+
+    bool WaitFor(Func<bool> cond, int timeoutMs)
+    {
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < timeoutMs)
+        {
+            if (cond()) return true;
+            Thread.Sleep(1000);
+        }
+        return false;
+    }
+    int NewThresholdCallsSince(DateTimeOffset since)
+    {
+        if (!File.Exists(TokenLogPath())) return 0;
+        return File.ReadLines(TokenLogPath())
+            .Select(l => { try { return JsonDocument.Parse(l).RootElement; } catch { return default; } })
+            .Count(r => r.ValueKind == JsonValueKind.Object
+                && r.GetProperty("Trigger").GetInt32() == 1 /*Threshold*/
+                && r.GetProperty("Time").GetDateTimeOffset() >= since);
+    }
+
+    try
+    {
+        foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+        Thread.Sleep(1500);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(backup)!.AsObject();
+        node["ThresholdPercent"] = 40;              // Normalize 钳制下限 40
+        node["LlmThresholdTriggerEnabled"] = true;
+        node["LlmTimerTriggerEnabled"] = false;     // 排除定时触发干扰
+        node["LlmDailyCallCap"] = 1;                // 上限 1:一次后即被拦
+        node["MonthlyTokenBudget"] = 0;             // 排除预算闸门干扰
+        node["RulesMasterEnabled"] = false;         // 排除清理规则干扰(免得真去清理)
+        File.WriteAllText(settingsPath, node.ToJsonString());
+
+        // 内存压力推过阈值(机器常态 ~31%,阈值下限 40%)
+        while (MemUsedPercent() < 45 && pressure.Count < 40)
+        {
+            var chunk = new byte[256 * 1024 * 1024];
+            for (int i = 0; i < chunk.Length; i += 4096) chunk[i] = 1;
+            pressure.Add(chunk);
+        }
+        Console.WriteLine($"[diag] 内存占用 {MemUsedPercent()}%(压力 {pressure.Count * 256}MB)");
+        if (MemUsedPercent() < 42) { Fail(T, "无法把内存占用推过 42%,放弃"); return; }
+
+        var fireStart = DateTimeOffset.Now;
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        // 等调度器 tick(60s) + 真实 LLM 请求(≤90s)
+        if (!WaitFor(() => NewThresholdCallsSince(fireStart) >= 1, 240000))
+        { Fail(T, "240s 内未发生阈值自动分析(jsonl 无 Trigger=1 记录)"); return; }
+        Console.WriteLine("[diag] 6.1 阈值自动分析触发 ✓ (jsonl 新增 Trigger=1)");
+
+        // 6.2 每日上限:撤压 → 占用回落(重置 _thresholdFiredToday)→ 再加压,上限=1 拦住第二次
+        pressure.Clear();
+        GC.Collect();
+        if (!WaitFor(() => MemUsedPercent() < 40, 60000))
+            Console.WriteLine($"[WARN] 撤压后占用仍 {MemUsedPercent()}%,上限验证可能受触发位未重置影响");
+        while (MemUsedPercent() < 45 && pressure.Count < 40)
+        {
+            var chunk = new byte[256 * 1024 * 1024];
+            for (int i = 0; i < chunk.Length; i += 4096) chunk[i] = 1;
+            pressure.Add(chunk);
+        }
+        Console.WriteLine($"[diag] 二次加压至 {MemUsedPercent()}%,等 150s(2+ 个 tick)确认不再触发");
+        var capStart = DateTimeOffset.Now;
+        Thread.Sleep(150000);
+        if (NewThresholdCallsSince(capStart) != 0)
+        { Fail(T, "达到每日上限后仍发生自动分析"); return; }
+        Console.WriteLine("[diag] 6.2 每日上限拦截 ✓ (加压 150s 无新增)");
+        Pass(T);
+    }
+    finally
+    {
+        pressure.Clear();
+        GC.Collect();
+        foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+        Thread.Sleep(1500);
+        File.WriteAllText(settingsPath, backup);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        Thread.Sleep(3000);
+        Console.WriteLine("[OK] 已恢复原设置并重启应用");
+    }
+}
+
+// ---------- 测试:内存泄漏告警(M2 第 8 节) ----------
+// 8.1 观察窗 5min/阈值 50MB,泄漏进程每 10s 长 15MB(单调,防回落重置)→ 告警行出现
+// 8.2 告警行点「智能分析」→ jsonl 新增 Trigger=3(Leak)
+// 8.3 泄漏检测卡 NumberBox 改动即存(50→80、5→10),重启后 UI 保持
+void TestLeakAlert()
+{
+    const string T = "M2-8 内存泄漏告警";
+    var settingsPath = SettingsPath();
+    var backup = File.ReadAllText(settingsPath);
+    Process? leaker = null;
+
+    try
+    {
+        foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+        Thread.Sleep(1500);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(backup)!.AsObject();
+        node["LeakDetectionEnabled"] = true;
+        node["LeakGrowthThresholdMb"] = 50;         // 下限
+        node["LeakWindowMinutes"] = 5;              // 下限
+        node["RulesMasterEnabled"] = false;         // 关掉清理规则:L1 清理会裁剪泄漏进程工作集→回落重置观察窗(实测踩坑)
+        File.WriteAllText(settingsPath, node.ToJsonString());
+        // 直接启动(不走 explorer)以便注入 AMM_LEAK_DEBUG=1 诊断日志环境变量
+        var appPsi = new ProcessStartInfo(ExePath()) { UseShellExecute = false };
+        appPsi.Environment["AMM_LEAK_DEBUG"] = "1";
+        Process.Start(appPsi);
+        Thread.Sleep(5000);
+
+        // 泄漏进程:powershell 改名 uismokeleaker,每 10s 多 15MB 且持有不释放;
+        // 每轮以页粒度重触所有块,防止旧页被系统换出导致 WS 回落(回落会重置观察窗)
+        var leakerPath = Path.Combine(Path.GetTempPath(), "uismokeleaker.exe");
+        File.Copy(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", leakerPath, overwrite: true);
+        leaker = Process.Start(new ProcessStartInfo(leakerPath,
+            "-NoProfile -Command \"$c = New-Object System.Collections.Generic.List[byte[]]; " +
+            "while($true){ $b = New-Object byte[] 15MB; for($i=0; $i -lt $b.Length; $i+=4096){ $b[$i]=1 }; " +
+            "$c.Add($b); foreach($x in $c){ for($i=0; $i -lt $x.Length; $i+=4096){ $x[$i]=1 } }; Start-Sleep 10 }\"")
+        { UseShellExecute = false })!;
+        Console.WriteLine($"[diag] 泄漏进程 pid={leaker.Id},增长 90MB/min,等告警(窗口 5min,最长等 10min)");
+
+        var (automation, window) = Attach();
+        using (automation)
+        {
+            if (!NavTo(window, "智能分析")) { Fail(T, "导航到智能分析页失败"); return; }
+            // 8.1 告警行:进程名文本 uismokeleaker 出现在泄漏告警卡
+            var alertRow = RetryFind(() => window.FindAllDescendants(cf =>
+                    cf.ByName("uismokeleaker").And(cf.ByControlType(ControlType.Text)))
+                    .FirstOrDefault(), 600000);
+            if (alertRow == null)
+            {
+                leaker.Refresh();
+                Fail(T, $"10 分钟内未出现泄漏告警(进程存活: {!leaker.HasExited}, WS={leaker.WorkingSet64 >> 20}MB)");
+                // 诊断:打印 leak-debug.log 末尾几行,看每跳轨道增长/回落情况
+                var dbg = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "AiMemoryManager", "leak-debug.log");
+                if (File.Exists(dbg))
+                    foreach (var l in File.ReadLines(dbg).TakeLast(8)) Console.WriteLine("[leakdbg] " + l);
+                else Console.WriteLine("[leakdbg] 无日志文件(泄漏采样未运行?)");
+                return;
+            }
+            Console.WriteLine("[diag] 8.1 泄漏告警出现 ✓");
+
+            // 8.2 告警行右侧「智能分析」按钮 → Leak 触发器分析 → jsonl Trigger=3
+            int before = TokenLogLines();
+            var analyzeBtn = RetryFind(() => window.FindAllDescendants(cf =>
+                    cf.ByName("智能分析").And(cf.ByControlType(ControlType.Button)))
+                    // 行内按钮:与告警行同一水平线
+                    .FirstOrDefault(b => Math.Abs(b.BoundingRectangle.Y - alertRow.BoundingRectangle.Y) < 30), 8000);
+            if (analyzeBtn == null) { Fail(T, "找不到告警行的智能分析按钮"); return; }
+            Trigger(analyzeBtn);
+            bool fired = false;
+            var sw = Stopwatch.StartNew();
+            while (sw.Elapsed < TimeSpan.FromSeconds(180) && !fired)
+            {
+                Thread.Sleep(2000);
+                if (TokenLogLines() > before)
+                {
+                    var last = JsonDocument.Parse(File.ReadLines(TokenLogPath()).Last()).RootElement;
+                    if (last.GetProperty("Trigger").GetInt32() == 3 /*Leak*/) fired = true;
+                }
+            }
+            if (!fired) { Fail(T, "泄漏一键分析未发起或 Trigger≠3"); return; }
+            Console.WriteLine("[diag] 8.2 泄漏触发分析 ✓ (jsonl Trigger=3)");
+
+            // 8.3 泄漏检测卡设置持久化:UI 改阈值 50→80、窗口 5→10 → settings.json 同步 → 重启保持
+            if (!NavTo(window, "大模型")) { Fail(T, "导航到大模型页失败"); return; }
+            AutomationElement? FindNumberBox(string val) => RetryFind(() => FormEdits(window)
+                .Where(e => e.Patterns.Value.Pattern.Value.Value == val)
+                .OrderByDescending(e => e.BoundingRectangle.Y)   // 泄漏卡在页面下方
+                .FirstOrDefault(), 5000);
+            var thrBox = FindNumberBox("50");
+            var winBox = FindNumberBox("5");
+            if (thrBox == null || winBox == null) { Fail(T, "找不到泄漏检测卡的 NumberBox"); return; }
+            SetEditText(thrBox, "80");
+            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
+            Thread.Sleep(400);
+            SetEditText(winBox, "10");
+            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
+            Thread.Sleep(800);
+            using (var doc = JsonDocument.Parse(File.ReadAllText(settingsPath)))
+            {
+                if (doc.RootElement.GetProperty("LeakGrowthThresholdMb").GetInt32() != 80
+                    || doc.RootElement.GetProperty("LeakWindowMinutes").GetInt32() != 10)
+                { Fail(T, "泄漏检测卡改动未保存到 settings.json"); return; }
+            }
+            // 重启验证 UI 保持
+            foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+            Thread.Sleep(1500);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+            Thread.Sleep(5000);
+            var (automation2, window2) = Attach();
+            using (automation2)
+            {
+                if (!NavTo(window2, "大模型")) { Fail(T, "重启后导航失败"); return; }
+                var thrBox2 = RetryFind(() => FormEdits(window2)
+                    .FirstOrDefault(e => e.Patterns.Value.Pattern.Value.Value == "80"), 8000);
+                var winBox2 = RetryFind(() => FormEdits(window2)
+                    .FirstOrDefault(e => e.Patterns.Value.Pattern.Value.Value == "10"), 8000);
+                if (thrBox2 == null || winBox2 == null) { Fail(T, "重启后泄漏检测设置未保持"); return; }
+            }
+            Console.WriteLine("[diag] 8.3 泄漏检测设置改动即存、重启保持 ✓");
+            Pass(T);
+        }
+    }
+    finally
+    {
+        try { leaker?.Kill(); } catch { }
+        foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+        Thread.Sleep(1500);
+        File.WriteAllText(settingsPath, backup);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        Thread.Sleep(3000);
+        Console.WriteLine("[OK] 已恢复原设置并重启应用");
+    }
+}
+
+
+// 7.1 统计页与 token-usage.jsonl 一致(本月聚合卡 + 最近调用首行)
+// 7.2 档案填单价 → 费用卡显示 $ 估算
+// 7.3 月度预算写 100 → 统计页预算告警出现;7.4 手动分析被拦,jsonl 不增
+// ---------- 测试:Token 统计与预算闸门(M2 第 7 节) ----------
+// 7.1 统计页与 token-usage.jsonl 一致(本月聚合卡 + 最近调用首行)
+// 7.2 档案填单价 → 费用卡显示 $ 估算
+// 7.3 月度预算写 100 → 统计页预算告警出现;7.4 手动分析被拦,jsonl 不增
+void TestTokenStats()
+{
+    const string T = "M2-7 Token统计/预算";
+    var (automation, window) = Attach();
+    using (automation)
+    {
+        // jsonl 侧聚合(与 TokenStatsService.AggregateMonth 同口径:本地时区本月)
+        var records = File.ReadAllLines(TokenLogPath())
+            .Select(l => JsonDocument.Parse(l).RootElement)
+            .Select(r => (Time: r.GetProperty("Time").GetDateTimeOffset(),
+                          In: r.GetProperty("InputTokens").GetInt32(),
+                          Out: r.GetProperty("OutputTokens").GetInt32()))
+            .ToList();
+        var now = DateTimeOffset.Now;
+        var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset);
+        var month = records.Where(r => r.Time >= monthStart).ToList();
+        string expectedMonth = $"输入 {month.Sum(r => (long)r.In):N0} · 输出 {month.Sum(r => (long)r.Out):N0} · 调用次数 {month.Count:N0}";
+
+        if (!NavTo(window, "Token 统计")) { Fail(T, "导航到 Token 统计页失败"); return; }
+        // 三张聚合卡(今日/本周/本月)文本都以「输入」开头,按 X 坐标取最右一张(本月)
+        var aggTexts = RetryFind(() =>
+        {
+            var l = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                .Where(e => e.Name.StartsWith("输入") && e.Name.Contains("调用次数"))
+                .OrderBy(e => e.BoundingRectangle.X).ToList();
+            return l.Count >= 3 ? l[^1] : null;
+        }, 5000);
+        if (aggTexts == null) { Fail(T, "找不到本月聚合文本"); return; }
+        var monthText = aggTexts;
+        Console.WriteLine($"[diag] 页面本月: {monthText.Name} | jsonl 计算: {expectedMonth}");
+        if (monthText.Name != expectedMonth) { Fail(T, "本月聚合与 jsonl 不一致"); return; }
+
+        // 最近调用首行 = jsonl 最后一条(时间 MM-dd HH:mm:ss + 输入/输出)
+        var last = records.Last();
+        var expectTime = last.Time.ToLocalTime().ToString("MM-dd HH:mm:ss");
+        var rowFound = RetryFind(() => window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+            .FirstOrDefault(e => e.Name == expectTime), 5000);
+        if (rowFound == null) { Fail(T, $"最近调用首行与 jsonl 不符(期望时间 {expectTime})"); return; }
+        Console.WriteLine($"[diag] 7.1 统计页与 jsonl 一致 ✓ (本月 {month.Count} 次, 最新 {expectTime})");
+
+        // 7.2 填单价 → 费用显示。LLM 页编辑 deepseek,单价框(第 5 个 Edit)设 2,保存
+        if (!NavTo(window, "大模型")) { Fail(T, "导航到大模型页失败"); return; }
+        var editBtn = RetryFind(() => ProfileRowButton(window, "deepseek", "编辑"));
+        if (editBtn == null) { Fail(T, "找不到 deepseek 编辑按钮"); return; }
+        Trigger(editBtn);
+        Thread.Sleep(800);
+        var edits = FormEdits(window);
+        if (edits.Count < 5) { Fail(T, "大模型页编辑框不足"); return; }
+        var priceBox = edits[4];
+        priceBox.Focus();
+        Thread.Sleep(200);
+        SetEditText(priceBox, "2");
+        FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
+        Thread.Sleep(400);
+        var saveBtn = window.FindFirstDescendant(cf => cf.ByName("保存").And(cf.ByControlType(ControlType.Button)));
+        Trigger(saveBtn);
+        Thread.Sleep(800);
+        double price;
+        using (var doc = JsonDocument.Parse(File.ReadAllText(ProfilesPath())))
+            price = doc.RootElement.EnumerateArray().First(p => p.GetProperty("Name").GetString() == "deepseek")
+                .GetProperty("PricePerMillionTokens").GetDouble();
+        if (price != 2) { Fail(T, $"单价未保存(实际 {price})"); return; }
+
+        if (!NavTo(window, "Token 统计")) { Fail(T, "返回统计页失败"); return; }
+        double expectedCost = 2.0 * month.Sum(r => (long)r.In + r.Out) / 1_000_000d;
+        var expectCost = expectedCost.ToString("$0.0000");
+        var costText = RetryFind(() => FindTextStarting(window, "$"), 5000);
+        Console.WriteLine($"[diag] 页面费用: {costText?.Name ?? "(无)"} | 期望: {expectCost}");
+        if (costText == null || costText.Name != expectCost) { Fail(T, "费用显示不符"); return; }
+        Console.WriteLine("[diag] 7.2 单价费用估算 ✓");
+
+        // 恢复单价 0
+        if (!NavTo(window, "大模型")) { Fail(T, "导航回大模型页失败"); return; }
+        editBtn = RetryFind(() => ProfileRowButton(window, "deepseek", "编辑"));
+        Trigger(editBtn);
+        Thread.Sleep(800);
+        edits = FormEdits(window);
+        priceBox = edits[4];
+        priceBox.Focus();
+        Thread.Sleep(200);
+        SetEditText(priceBox, "0");
+        FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);
+        Thread.Sleep(400);
+        Trigger(window.FindFirstDescendant(cf => cf.ByName("保存").And(cf.ByControlType(ControlType.Button))));
+        Thread.Sleep(800);
+    }
+
+    // 7.3/7.4 预算闸门:改全局设置需重启应用(先杀再改文件)
+    var settingsBackup = File.ReadAllText(SettingsPath());
+    try
+    {
+        foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+        Thread.Sleep(1500);
+        var node = System.Text.Json.Nodes.JsonNode.Parse(settingsBackup)!.AsObject();
+        node["MonthlyTokenBudget"] = 100;   // 本月已用远超 100,闸门立即生效
+        File.WriteAllText(SettingsPath(), node.ToJsonString());
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        Thread.Sleep(5000);
+
+        var (automation2, window2) = Attach();
+        using (automation2)
+        {
+            if (!NavTo(window2, "Token 统计")) { Fail(T, "重启后导航失败"); return; }
+            // 预算告警 InfoBar 功能正常但对 UIA 不可见(WPF-UI InfoBar 不进自动化树),
+            // 视觉确认见 artifacts/tokenstats-budget.png;这里以功能性闸门为准(7.4)
+
+            // 7.4 手动分析被拦
+            if (!NavTo(window2, "智能分析")) { Fail(T, "导航到智能分析页失败"); return; }
+            var runBtn = RetryFind(() => window2.FindFirstDescendant(cf =>
+                cf.ByName("开始分析").And(cf.ByControlType(ControlType.Button))));
+            if (runBtn == null) { Fail(T, "找不到开始分析按钮"); return; }
+            int before = TokenLogLines();
+            Trigger(runBtn);
+            if (RetryFind(() => FindTextStarting(window2, "已达月度预算"), 8000) == null)
+            { Fail(T, "手动分析未被预算拦停"); return; }
+            Thread.Sleep(2000);
+            if (TokenLogLines() != before) { Fail(T, "被拦后仍新增了 token 记录"); return; }
+            Console.WriteLine("[diag] 7.4 手动分析被预算闸门拦停 ✓");
+        }
+        Pass(T);
+    }
+    finally
+    {
+        foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+        Thread.Sleep(1500);
+        File.WriteAllText(SettingsPath(), settingsBackup);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+        Thread.Sleep(3000);
+        Console.WriteLine("[OK] 已恢复设置并重启应用");
+    }
+}
+
 // ---------- 测试:大模型档案页(M2 1-2 节) ----------
 // 1.x: 编辑现有 deepseek 档案 → 测试连接成功 → 拉取模型有列表 → 设为当前且重启保留
 // 2.x: 本地地址无密钥可保存;远程地址无密钥被拦;Ollama 未运行时失败提示可读;运行时可连接
@@ -1186,8 +1822,68 @@ void CloseStuckDialogs()
     Console.WriteLine($"[OK] 关闭 {closed} 个残留对话框");
 }
 
-try
-{
+    if (mode == "probecompress")
+    {
+        var (a, w) = Attach();
+        using (a)
+        {
+            NavTo(w, "智能分析");
+            Thread.Sleep(1000);
+            var txt = w.FindAllDescendants(cf => cf.ByName("立即压缩").And(cf.ByControlType(ControlType.Text))).FirstOrDefault();
+            if (txt == null) { Console.WriteLine("no 立即压缩 text"); return failures; }
+            Console.WriteLine($"before: offscreen={txt.IsOffscreen} rect={txt.BoundingRectangle} scrollitem={txt.Patterns.ScrollItem.IsSupported}");
+            try { txt.Patterns.ScrollItem.Pattern.ScrollIntoView(); } catch (Exception ex) { Console.WriteLine("scroll err: " + ex.Message); }
+            Thread.Sleep(1000);
+            Console.WriteLine($"after scroll: offscreen={txt.IsOffscreen} rect={txt.BoundingRectangle}");
+            var pt = txt.GetClickablePoint();
+            Console.WriteLine($"clickable: {pt}");
+            txt.Click();
+            Thread.Sleep(3000);
+            foreach (var t in w.FindAllDescendants(cf => cf.ByControlType(ControlType.Text)))
+                if (t.Name.StartsWith("已释放") || t.Name.StartsWith("压缩") || t.Name.Contains("失败"))
+                    Console.WriteLine("[result] " + t.Name);
+        }
+        return failures;
+    }
+    if (mode == "dumptexts")
+    {
+        var (a, w) = Attach();
+        using (a)
+        {
+            var nav = args.Length > 1 ? args[1] : "Token 统计";
+            NavTo(w, nav);
+            Thread.Sleep(1000);
+            if (args.Length > 2 && args[2] == "click")
+            {
+                var btn = w.FindFirstDescendant(cf => cf.ByName("开始分析").And(cf.ByControlType(ControlType.Button)));
+                Trigger(btn);
+                for (int i = 0; i < 150; i++)
+                {
+                    Thread.Sleep(1000);
+                    var u = w.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                        .FirstOrDefault(e => e.Name.StartsWith("本次消耗"));
+                    if (u != null) break;
+                }
+            }
+            foreach (var t in w.FindAllDescendants(cf => cf.ByControlType(ControlType.Text)))
+                if (!string.IsNullOrEmpty(t.Name))
+                    Console.WriteLine($"[text] '{t.Name}' @ {t.BoundingRectangle}");
+            if (args.Length > 2 && args[2] == "all")
+                foreach (var e in w.FindAllDescendants())
+                    if (!string.IsNullOrEmpty(e.Name) && e.ControlType != ControlType.Text)
+                        Console.WriteLine($"[{e.ControlType}] '{e.Name}' @ {e.BoundingRectangle}");
+            if (args.Length > 2 && args[2] == "region")
+                foreach (var e in w.FindAllDescendants())
+                {
+                    var r = e.BoundingRectangle;
+                    if (r.Y >= 380 && r.Y <= 520)
+                        Console.WriteLine($"[{e.ControlType}] '{e.Name}' class={e.ClassName} @ {r}");
+                }
+        }
+        return failures;
+    }
+    try
+    {
     if (mode == "closewins") CloseStuckDialogs();
     else if (mode.StartsWith("cleanup:")) Cleanup(mode["cleanup:".Length..]);
     else
@@ -1199,6 +1895,11 @@ try
         if (mode == "fullscreen") TestFullscreen();   // 改设置+重启应用,不进 all
         if (mode == "llm") TestLlmProfiles();         // 真实 LLM API 调用,不进 all
         if (mode == "analysis") TestAnalysis();       // 真实 LLM API 调用,不进 all
+        if (mode == "tokenstats") TestTokenStats();   // 改设置+重启应用,不进 all
+        if (mode == "compress") TestCompress();       // 真实 LLM API 调用,不进 all
+        if (mode == "prompt") TestPromptTemplate();   // 真实 LLM API 调用,不进 all
+        if (mode == "autotrigger") TestAutoTrigger(); // 改设置+重启+内存压力,不进 all
+        if (mode == "leak") TestLeakAlert();          // ~10min,真实 LLM API 调用,不进 all
     }
 }
 catch (Exception ex)
