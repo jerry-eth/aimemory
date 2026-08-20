@@ -44,6 +44,25 @@ public class AnalysisPromptBuilderTests
         Assert.NotEqual(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"), AnalysisPromptBuilder.SnapshotHash(a, "m2", "t", "", "中文"));
     }
 
+    [Fact] public void 快照哈希对同名进程顺序互换稳定()
+    {
+        // 同名多实例内存相近时,两次采样的降序排列可能互换;哈希不应因此变化(否则真实系统上缓存永不命中)
+        var a = new List<ProcessSnapshot>
+        {
+            new(1, "chrome", null, 500L << 20, true),
+            new(2, "chrome", null, 498L << 20, true),
+            new(3, "code", null, 300L << 20, true),
+        };
+        var b = new List<ProcessSnapshot>
+        {
+            new(2, "chrome", null, 498L << 20, true),
+            new(1, "chrome", null, 500L << 20, true),
+            new(3, "code", null, 300L << 20, true),
+        };
+        Assert.Equal(AnalysisPromptBuilder.SnapshotHash(a, "m", "t", "", "中文"),
+                     AnalysisPromptBuilder.SnapshotHash(b, "m", "t", "", "中文"));
+    }
+
     [Fact] public void 快照哈希纳入自定义指令与语言()
     {
         var a = Snapshots(3);

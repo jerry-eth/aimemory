@@ -655,6 +655,425 @@ void TestFullscreen()
     }
 }
 
+// ---------- 测试:智能分析与缓存(M2 第 3 节) ----------
+// 3.1 开始分析出建议;3.2 相同快照再分析命中缓存不耗 token;3.3 强制刷新走真实请求;
+// 3.4 进程状态变化(新进程进快照)缓存失效;3.5 自定义指令变化缓存失效。
+// 以 token-usage.jsonl 行数为"真实请求"的最终判定;以 UsageText 的「(缓存结果…)」为缓存命中判定。
+// 注意:本机是活跃开发机,Top30 进程 60 秒内桶位/成员必然变化(实测 6/30 项变化),
+// 缓存永远不可能命中;故测试期间把当前 Top40 活跃进程临时加进白名单(不进分析快照),
+// 制造一个安静的快照集合,结束后恢复原设置。
+string TokenLogPath() => Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    "AiMemoryManager", "token-usage.jsonl");
+
+int TokenLogLines() => File.Exists(TokenLogPath()) ? File.ReadAllLines(TokenLogPath()).Length : 0;
+
+void TestAnalysis()
+{
+    const string T = "M2-3 智能分析与缓存";
+    var settingsBackup = File.ReadAllText(SettingsPath());
+
+    // 停应用 → 把当前 Top40 活跃进程临时加入白名单 → 重启(白名单在启动时建快照)
+    foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+    Thread.Sleep(1500);
+    var critical = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "system", "registry", "smss", "csrss", "wininit", "winlogon", "services",
+          "lsass", "svchost", "dwm", "explorer", "sihost", "taskhostw", "ctfmon",
+          "securityhealthservice", "msmpeng", "memory compression", "system idle process" };
+    var noisy = Process.GetProcesses()
+        .Where(p => !critical.Contains(p.ProcessName))
+        .OrderByDescending(p => { try { return p.WorkingSet64; } catch { return 0L; } })
+        .Take(40)
+        .Select(p => p.ProcessName.ToLowerInvariant())
+        .Distinct()
+        .ToList();
+    var node = System.Text.Json.Nodes.JsonNode.Parse(settingsBackup)!.AsObject();
+    var excl = new System.Text.Json.Nodes.JsonArray();
+    foreach (var e in node["ExcludedProcesses"]!.AsArray().ToList()) excl.Add(e!.GetValue<string>());
+    foreach (var n in noisy) if (!excl.Any(e => e!.GetValue<string>() == n)) excl.Add(n);
+    node["ExcludedProcesses"] = excl;
+    File.WriteAllText(SettingsPath(), node.ToJsonString());
+    Console.WriteLine($"[diag] 临时白名单 {excl.Count} 项(原 {settingsBackup.Length} 字节设置已备份)");
+    Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+    Thread.Sleep(5000);
+
+    var (automation, window) = Attach();
+    using (automation)
+    {
+        var origInstructions = JsonDocument.Parse(File.ReadAllText(SettingsPath())).RootElement
+            .GetProperty("CustomInstructions").GetString() ?? "";
+
+        // 设置自定义指令(改哈希,保证第一次「开始分析」必为真实请求,不受 24h 内旧缓存影响)
+        void SetCustomInstructions(string text)
+        {
+            if (!NavTo(window, "大模型")) throw new InvalidOperationException("导航到大模型页失败");
+            var edits = FormEdits(window);
+            if (edits.Count < 6) throw new InvalidOperationException($"大模型页编辑框不足({edits.Count})");
+            var box = edits[5];   // 名称/BaseUrl/ApiKey/模型combo/单价numberbox 之后是自定义指令框
+            box.Focus();          // 公开 API(FlaUI 的 Focus() 封装了 SetFocus)
+            Thread.Sleep(200);
+            SetEditText(box, text);
+            FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.TAB);   // LostFocus 触发绑定保存
+            Thread.Sleep(500);
+            var cur = JsonDocument.Parse(File.ReadAllText(SettingsPath())).RootElement
+                .GetProperty("CustomInstructions").GetString() ?? "";
+            if (cur != text) throw new InvalidOperationException($"自定义指令未保存(当前: '{cur}')");
+        }
+
+        AutomationElement? UsageText() => FindTextStarting(window, "本次消耗");
+
+        // 等待分析完成:real=UsageText 出现且不含缓存标记;cache=含缓存标记。
+        // 必须等文本相对 prev 发生变化,否则上一次的结果残留会被误判成本次结果
+        bool WaitUsage(bool expectCache, int timeoutSec, string? prev)
+        {
+            var sw = Stopwatch.StartNew();
+            while (sw.Elapsed < TimeSpan.FromSeconds(timeoutSec))
+            {
+                var u = UsageText()?.Name;
+                if (u != null && u != prev && u.Contains("缓存结果") == expectCache &&
+                    Regex.IsMatch(u, expectCache ? @"本次消耗 0 \+ 0" : @"本次消耗 [1-9]\d* \+ [1-9]\d*"))
+                    return true;
+                Thread.Sleep(1000);
+            }
+            return false;
+        }
+
+        try
+        {
+            // 标记进程 A:200MB 常驻,给 LLM 一个可压缩目标(否则安静快照下建议可能为空,
+            // 「强制刷新」按钮 HasSuggestions=false 不显示),同时内存恒定不影响缓存命中
+            var markerPath = Path.Combine(Path.GetTempPath(), "uismokemarker.exe");
+            File.Copy(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", markerPath, overwrite: true);
+            Process? markerA = null, markerB = null;
+            Process StartMarker(string exe, int sleepSec) => Process.Start(new ProcessStartInfo(exe,
+                $"-NoProfile -Command \"$x = New-Object byte[] 200MB; for($i=0; $i -lt $x.Length; $i+=4096){{ $x[$i]=1 }}; Start-Sleep {sleepSec}\"")
+            { UseShellExecute = false })!;
+            markerA = StartMarker(markerPath, 900);
+            Thread.Sleep(5000);   // 等分配完成
+
+            SetCustomInstructions(origInstructions + " ui-smoke-cache-test");
+            if (!NavTo(window, "智能分析")) { Fail(T, "导航到智能分析页失败"); return; }
+            var runBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                cf.ByName("开始分析").And(cf.ByControlType(ControlType.Button))));
+            if (runBtn == null) { Fail(T, "找不到开始分析按钮"); return; }
+
+            // 3.1 首次分析(真实请求)
+            int c0 = TokenLogLines();
+            string? prev = UsageText()?.Name;
+            Trigger(runBtn);
+            if (!WaitUsage(expectCache: false, 150, prev)) { Fail(T, "首次分析超时或无消耗: " + (UsageText()?.Name ?? "(无)")); return; }
+            if (TokenLogLines() != c0 + 1) { Fail(T, "首次分析后 token 记录未增加"); return; }
+            if (RetryFind(() => FindTextStarting(window, "分析报告"), 5000) == null)
+            { Fail(T, "分析报告卡未出现"); return; }
+            Console.WriteLine("[diag] 3.1 首次分析 ✓ " + UsageText()!.Name);
+
+            // 3.2 相同快照再分析 → 缓存。真实环境里进程的 32MB 桶偶尔跨界导致哈希变化,
+            // 每次真实请求都会把新快照写入缓存,所以多点几次(≤4),任何一次命中即通过
+            bool cacheHit = false;
+            for (int attempt = 0; attempt < 4 && !cacheHit; attempt++)
+            {
+                int before = TokenLogLines();
+                prev = UsageText()?.Name;
+                Trigger(runBtn);
+                if (WaitUsage(expectCache: true, 30, prev))
+                {
+                    if (TokenLogLines() != before) { Fail(T, "缓存命中却新增了 token 记录"); return; }
+                    cacheHit = true;
+                }
+                else if (WaitUsage(expectCache: false, 150, prev))
+                {
+                    if (TokenLogLines() != before + 1) { Fail(T, "真实请求但 token 记录未增加"); return; }
+                    Console.WriteLine($"[diag] 3.2 第{attempt + 1}次仍为真实请求(快照桶漂移),重试");
+                }
+                else { Fail(T, "二次分析超时: " + (UsageText()?.Name ?? "(无)")); return; }
+            }
+            if (!cacheHit) { Fail(T, "连续 4 次分析均未命中缓存,缓存机制存疑"); return; }
+            Console.WriteLine("[diag] 3.2 缓存命中 ✓ " + UsageText()!.Name);
+
+            // 3.3 强制刷新 → 真实请求
+            var forceBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                cf.ByName("强制刷新").And(cf.ByControlType(ControlType.Button))));
+            if (forceBtn == null) { Fail(T, "找不到强制刷新按钮"); return; }
+            int cBefore = TokenLogLines();
+            prev = UsageText()?.Name;
+            Trigger(forceBtn);
+            if (!WaitUsage(expectCache: false, 150, prev)) { Fail(T, "强制刷新超时"); return; }
+            if (TokenLogLines() != cBefore + 1) { Fail(T, "强制刷新后 token 记录未增加"); return; }
+            Console.WriteLine("[diag] 3.3 强制刷新 ✓ " + UsageText()!.Name);
+
+            // 3.4 进程状态变化 → 缓存失效(新进程 B 进入快照,名字不在临时白名单里)
+            var markerBPath = Path.Combine(Path.GetTempPath(), "uismokemark2.exe");
+            File.Copy(@"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", markerBPath, overwrite: true);
+            markerB = StartMarker(markerBPath, 300);
+            Thread.Sleep(6000);   // 等内存分配完成并进入快照
+            try
+            {
+                cBefore = TokenLogLines();
+                prev = UsageText()?.Name;
+                Trigger(runBtn);
+                if (!WaitUsage(expectCache: false, 150, prev)) { Fail(T, "新进程后分析超时"); return; }
+                if (TokenLogLines() != cBefore + 1) { Fail(T, "进程变化后未触发真实请求(可能误中缓存)"); return; }
+                Console.WriteLine("[diag] 3.4 进程变化缓存失效 ✓");
+            }
+            finally { try { markerB?.Kill(); } catch { } }
+
+            // 3.5 自定义指令变化 → 缓存失效(改回原值,顺手恢复现场)
+            SetCustomInstructions(origInstructions);
+            if (!NavTo(window, "智能分析")) { Fail(T, "返回智能分析页失败"); return; }
+            runBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+                cf.ByName("开始分析").And(cf.ByControlType(ControlType.Button))));
+            cBefore = TokenLogLines();
+            prev = UsageText()?.Name;
+            Trigger(runBtn);
+            if (!WaitUsage(expectCache: false, 150, prev)) { Fail(T, "改指令后分析超时"); return; }
+            if (TokenLogLines() != cBefore + 1) { Fail(T, "指令变化后未触发真实请求(可能误中缓存)"); return; }
+            Console.WriteLine("[diag] 3.5 指令变化缓存失效 ✓");
+            try { markerA?.Kill(); } catch { }
+            Pass(T);
+        }
+        finally
+        {
+            // 恢复完整设置(含白名单与自定义指令)并重启应用
+            try
+            {
+                foreach (var p in Process.GetProcessesByName("AiMemoryManager")) p.Kill();
+                Thread.Sleep(1500);
+                File.WriteAllText(SettingsPath(), settingsBackup);
+                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+                Thread.Sleep(3000);
+                Console.WriteLine("[OK] 已恢复原设置并重启应用");
+            }
+            catch (Exception ex) { Console.WriteLine("[WARN] 恢复设置失败: " + ex.Message); }
+        }
+    }
+}
+
+// ---------- 测试:大模型档案页(M2 1-2 节) ----------
+// 1.x: 编辑现有 deepseek 档案 → 测试连接成功 → 拉取模型有列表 → 设为当前且重启保留
+// 2.x: 本地地址无密钥可保存;远程地址无密钥被拦;Ollama 未运行时失败提示可读;运行时可连接
+string ProfilesPath() => Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    "AiMemoryManager", "llm-profiles.json");
+
+void SetEditText(AutomationElement edit, string text)
+{
+    edit.Patterns.Value.Pattern.SetValue(text);
+    Thread.Sleep(150);
+}
+
+// 表单编辑框按 (Y,X) 排序取前三个:名称 / Base URL / API Key(其余 Edit 都在更下方)
+List<AutomationElement> FormEdits(AutomationElement window) =>
+    window.FindAllDescendants(cf => cf.ByControlType(ControlType.Edit))
+        .OrderBy(e => e.BoundingRectangle.Y).ThenBy(e => e.BoundingRectangle.X).ToList();
+
+AutomationElement? FindTextStarting(AutomationElement window, string prefix) =>
+    window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+        .FirstOrDefault(e => e.Name.StartsWith(prefix));
+
+// 在档案列表里按名字找行,返回行内的指定按钮(编辑/设为当前/删除)
+AutomationElement? ProfileRowButton(AutomationElement window, string profileName, string btnName)
+{
+    var nameText = window.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+        .FirstOrDefault(e => e.Name == profileName);
+    var li = nameText?.Parent;
+    while (li != null && li.ControlType != ControlType.ListItem) li = li.Parent;
+    return li?.FindFirstDescendant(cf => cf.ByName(btnName).And(cf.ByControlType(ControlType.Button)));
+}
+
+bool OllamaRunning()
+{
+    // 用 127.0.0.1 而不是 localhost:避免解析到 ::1 而 Ollama 只监听 IPv4 时误判
+    // ollama serve 刚启动时 /api/tags 可能短暂 500,多试几次
+    for (int i = 0; i < 6; i++)
+    {
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+            if (http.GetAsync("http://127.0.0.1:11434/api/tags").Result.IsSuccessStatusCode) return true;
+        }
+        catch (Exception ex) { Console.WriteLine("[diag] Ollama 探测异常: " + ex.GetBaseException().Message); }
+        Thread.Sleep(2000);
+    }
+    return false;
+}
+
+void TestLlmProfiles()
+{
+    const string T1 = "M2-1 DeepSeek 档案";
+    const string T2 = "M2-2 Ollama/无密钥校验";
+    var (automation, window) = Attach();
+    using (automation)
+    {
+        if (!NavTo(window, "大模型")) { Fail(T1, "导航到大模型页失败"); return; }
+
+        // ---- 1.2 测试连接(编辑现有 deepseek 档案,密钥留空=用已存的) ----
+        var editBtn = RetryFind(() => ProfileRowButton(window, "deepseek", "编辑"));
+        if (editBtn == null) { Fail(T1, "找不到 deepseek 档案的编辑按钮"); return; }
+        Trigger(editBtn);
+        Thread.Sleep(800);
+        var testBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+            cf.ByName("测试连接").And(cf.ByControlType(ControlType.Button))));
+        if (testBtn == null) { Fail(T1, "找不到测试连接按钮"); return; }
+        Trigger(testBtn);
+        var okText = RetryFind(() => FindTextStarting(window, "连接成功"), 40000);
+        if (okText == null)
+        {
+            var failText = FindTextStarting(window, "连接失败");
+            Fail(T1, "测试连接未成功: " + (failText?.Name ?? "(无结果文本)")); return;
+        }
+        Console.WriteLine($"[diag] 测试连接结果: {okText.Name}");
+
+        // ---- 1.3 拉取模型:结果文本报告模型数 ≥1,且建议进入模型下拉框 ----
+        var fetchBtn = window.FindFirstDescendant(cf => cf.ByName("拉取模型").And(cf.ByControlType(ControlType.Button)));
+        if (fetchBtn == null) { Fail(T1, "找不到拉取模型按钮"); return; }
+        Trigger(fetchBtn);
+        var fetchOk = RetryFind(() => FindTextStarting(window, "连接成功"), 40000);
+        if (fetchOk == null) { Fail(T1, "拉取模型失败"); return; }
+        Console.WriteLine($"[diag] 拉取模型结果: {fetchOk.Name}");
+        // 模型下拉框(可编辑 ComboBox,页面上第 2 个 ComboBox:第 1 个是预设)
+        var combos = window.FindAllDescendants(cf => cf.ByControlType(ControlType.ComboBox))
+            .OrderBy(c => c.BoundingRectangle.Y).ToList();
+        if (combos.Count < 2) { Fail(T1, "找不到模型下拉框"); return; }
+        var modelCombo = combos[1];
+        modelCombo.Patterns.ExpandCollapse.Pattern.Expand();
+        Thread.Sleep(500);
+        AutomationElement[]? items = null;
+        for (int i = 0; i < 20 && items == null; i++)
+        {
+            var l = modelCombo.FindAllDescendants(cf => cf.ByControlType(ControlType.ListItem));
+            if (l.Length > 0) items = l;
+            else Thread.Sleep(500);
+        }
+        if (items == null) { Fail(T1, "模型下拉框无列表项"); return; }
+        Console.WriteLine($"[diag] 模型列表 {items.Length} 项,首项: {items[0].Name}");
+        // 选择包含当前模型的项(避免改动用户配置),没有则选首项,保存后验证文件,再改回
+        var origModel = JsonDocument.Parse(File.ReadAllText(ProfilesPath())).RootElement.EnumerateArray()
+            .First(p => p.GetProperty("Name").GetString() == "deepseek").GetProperty("Model").GetString()!;
+        var pick = items.FirstOrDefault(i => i.Name.Contains(origModel)) ?? items[0];
+        var picked = pick.Name;
+        (pick.Patterns.SelectionItem.PatternOrDefault)?.Select();
+        Thread.Sleep(400);
+        try { modelCombo.Patterns.ExpandCollapse.Pattern.Collapse(); } catch { }
+        var saveBtn = window.FindFirstDescendant(cf => cf.ByName("保存").And(cf.ByControlType(ControlType.Button)));
+        Trigger(saveBtn);
+        Thread.Sleep(800);
+        var savedModel = JsonDocument.Parse(File.ReadAllText(ProfilesPath())).RootElement.EnumerateArray()
+            .First(p => p.GetProperty("Name").GetString() == "deepseek").GetProperty("Model").GetString()!;
+        if (savedModel != picked) { Fail(T1, $"选择模型保存后文件未更新(期望 {picked},实际 {savedModel})"); return; }
+        if (picked != origModel)
+        {
+            // 改回用户原模型
+            try { modelCombo.Patterns.Value.Pattern.SetValue(origModel); }
+            catch { var inner = modelCombo.FindFirstDescendant(cf => cf.ByControlType(ControlType.Edit)); inner?.Patterns.Value.Pattern.SetValue(origModel); }
+            Thread.Sleep(300);
+            Trigger(saveBtn);
+            Thread.Sleep(800);
+        }
+
+        // ---- 1.4 设为当前 + 重启保留 ----
+        var setActiveBtn = RetryFind(() => ProfileRowButton(window, "deepseek", "设为当前"));
+        if (setActiveBtn == null) { Fail(T1, "找不到设为当前按钮"); return; }
+        Trigger(setActiveBtn);
+        Thread.Sleep(800);
+        var activeId = JsonDocument.Parse(File.ReadAllText(SettingsPath())).RootElement
+            .GetProperty("ActiveProfileId").GetString();
+        var deepseekId = JsonDocument.Parse(File.ReadAllText(ProfilesPath())).RootElement.EnumerateArray()
+            .First(p => p.GetProperty("Name").GetString() == "deepseek").GetProperty("Id").GetString();
+        if (activeId != deepseekId) { Fail(T1, "设为当前后 ActiveProfileId 不符"); return; }
+        if (RetryFind(() => FindTextStarting(window, "当前使用"), 3000) == null)
+        { Fail(T1, "未显示「当前使用」标记"); return; }
+
+        // ---- 2.1 本地地址(Ollama)无密钥可保存 ----
+        var addBtn = RetryFind(() => window.FindFirstDescendant(cf =>
+            cf.ByName("新增档案").And(cf.ByControlType(ControlType.Button))));
+        if (addBtn == null) { Fail(T2, "找不到新增档案按钮"); return; }
+        Trigger(addBtn);
+        Thread.Sleep(500);
+        var edits = FormEdits(window);
+        if (edits.Count < 3) { Fail(T2, $"表单编辑框不足({edits.Count})"); return; }
+        SetEditText(edits[0], "ui-smoke-ollama");
+        SetEditText(edits[1], "http://localhost:11434/v1");
+        SetEditText(edits[2], "");                                  // 密钥留空
+        try { modelCombo.Patterns.Value.Pattern.SetValue("ui-smoke-test-model"); }
+        catch { var inner = modelCombo.FindFirstDescendant(cf => cf.ByControlType(ControlType.Edit)); inner?.Patterns.Value.Pattern.SetValue("ui-smoke-test-model"); }
+        FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL);   // 触发绑定刷新
+        Thread.Sleep(300);
+        Trigger(saveBtn);
+        Thread.Sleep(800);
+        bool ollamaSaved;
+        using (var doc = JsonDocument.Parse(File.ReadAllText(ProfilesPath())))
+            ollamaSaved = doc.RootElement.EnumerateArray().Any(p => p.GetProperty("Name").GetString() == "ui-smoke-ollama");
+        if (!ollamaSaved)
+        {
+            var msg = FindTextStarting(window, "保存失败") ?? FindTextStarting(window, "请填写") ?? FindTextStarting(window, "远程服务");
+            Fail(T2, "本地无密钥保存被拦: " + (msg?.Name ?? "(无提示)")); return;
+        }
+        Console.WriteLine("[diag] 2.1 本地地址无密钥保存成功 ✓");
+
+        // ---- 2.2 远程地址无密钥被拦 ----
+        Trigger(addBtn);
+        Thread.Sleep(500);
+        edits = FormEdits(window);
+        SetEditText(edits[0], "ui-smoke-remote-nokey");
+        SetEditText(edits[1], "https://api.deepseek.com/v1");
+        SetEditText(edits[2], "");
+        try { modelCombo.Patterns.Value.Pattern.SetValue("whatever"); }
+        catch { }
+        FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL);
+        Thread.Sleep(300);
+        Trigger(saveBtn);
+        Thread.Sleep(800);
+        var blocked = RetryFind(() => FindTextStarting(window, "远程服务必须填写 API 密钥"), 3000);
+        bool remoteSaved;
+        using (var doc = JsonDocument.Parse(File.ReadAllText(ProfilesPath())))
+            remoteSaved = doc.RootElement.EnumerateArray().Any(p => p.GetProperty("Name").GetString() == "ui-smoke-remote-nokey");
+        if (blocked == null || remoteSaved) { Fail(T2, $"远程无密钥未被拦(提示={(blocked != null)},已保存={remoteSaved})"); return; }
+        Console.WriteLine("[diag] 2.2 远程无密钥被拦 ✓: " + blocked.Name);
+
+        // ---- 2.3/2.4 Ollama 运行状态两种路径 ----
+        var ollamaEditBtn = RetryFind(() => ProfileRowButton(window, "ui-smoke-ollama", "编辑"));
+        if (ollamaEditBtn == null) { Fail(T2, "找不到 ui-smoke-ollama 的编辑按钮"); return; }
+        Trigger(ollamaEditBtn);
+        Thread.Sleep(800);
+        if (OllamaRunning())
+        {
+            Trigger(testBtn);
+            var ok2 = RetryFind(() => FindTextStarting(window, "连接成功"), 20000);
+            if (ok2 == null) { Fail(T2, "Ollama 运行中但连接失败: " + (FindTextStarting(window, "连接失败")?.Name ?? "?")); return; }
+            Console.WriteLine("[diag] 2.3 Ollama 运行中连接成功: " + ok2.Name);
+        }
+        else
+        {
+            Trigger(testBtn);
+            var fail2 = RetryFind(() => FindTextStarting(window, "连接失败"), 20000);
+            if (fail2 == null) { Fail(T2, "Ollama 未运行时无明确失败提示"); return; }
+            Console.WriteLine("[diag] 2.4 Ollama 未运行,失败提示: " + fail2.Name);
+        }
+
+        // 清理:删除测试档案
+        var delBtn = RetryFind(() => ProfileRowButton(window, "ui-smoke-ollama", "删除"));
+        Trigger(delBtn);
+        Thread.Sleep(800);
+        using (var doc = JsonDocument.Parse(File.ReadAllText(ProfilesPath())))
+        {
+            if (doc.RootElement.EnumerateArray().Any(p => p.GetProperty("Name").GetString() == "ui-smoke-ollama"))
+            { Fail(T2, "测试档案删除失败"); return; }
+        }
+        Pass(T2);
+
+        // ---- 1.4 收尾:重启应用验证「设为当前」保留 ----
+        automation.Dispose();
+        (automation, window) = RestartApp();
+        using (automation)
+        {
+            if (!NavTo(window, "大模型")) { Fail(T1, "重启后导航失败"); return; }
+            if (RetryFind(() => FindTextStarting(window, "当前使用"), 4000) == null)
+            { Fail(T1, "重启后「当前使用」标记丢失"); return; }
+        }
+        Pass(T1);
+    }
+}
+
 // ---------- 清理工具:从白名单移除指定条目(如 ui-smoke cleanup:claude) ----------
 void Cleanup(string name)
 {
@@ -778,6 +1197,8 @@ try
         if (mode is "language" or "all") TestLanguage();
         if (mode is "animations" or "all") TestAnimations();
         if (mode == "fullscreen") TestFullscreen();   // 改设置+重启应用,不进 all
+        if (mode == "llm") TestLlmProfiles();         // 真实 LLM API 调用,不进 all
+        if (mode == "analysis") TestAnalysis();       // 真实 LLM API 调用,不进 all
     }
 }
 catch (Exception ex)

@@ -60,7 +60,12 @@ public static class AnalysisPromptBuilder
     {
         var sb = new StringBuilder(model).Append('|').Append(templateContent).Append('|')
             .Append(customInstructions).Append('|').Append(language).Append('|');
-        foreach (var p in snapshots.OrderByDescending(p => p.WorkingSetBytes).Take(MaxProcesses))
+        // 成员资格仍按内存取 Top-N,但哈希串按 (名称,桶) 排序:
+        // 同名多实例(chrome 渲染进程等)内存相近时前后两次采样顺序会互换,
+        // 纯内存排序会让哈希在真实系统上几乎永不命中缓存(2026-08-20 自动化实测连续 4 次未命中)
+        foreach (var p in snapshots.OrderByDescending(p => p.WorkingSetBytes).Take(MaxProcesses)
+                     .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(p => p.WorkingSetBytes / BucketBytes))
             sb.Append(p.Name).Append(':').Append(p.WorkingSetBytes / BucketBytes).Append(';');
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
     }
