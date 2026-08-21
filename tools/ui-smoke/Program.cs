@@ -3165,6 +3165,83 @@ void CloseStuckDialogs()
         }
         return failures;
     }
+    if (mode == "cslimscan")
+    {
+        // C盘瘦身页:置顶→扫描占用→等扫描完成→截 4-cslim.png
+        if (Process.GetProcessesByName("AiMemoryManager").Length == 0)
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+            Thread.Sleep(6000);
+        }
+        var (a, w) = Attach();
+        using (a)
+        {
+            var hwndS = (IntPtr)w.Properties.NativeWindowHandle;
+            ShowWindow(hwndS, 9);
+            Thread.Sleep(600);
+            SetWindowPos(hwndS, (IntPtr)(-1), 0, 30, 1440, 900, 0);
+            ForceForeground(hwndS);
+            Thread.Sleep(800);
+            NavTo(w, "C 盘瘦身");
+            Thread.Sleep(3000);
+            var scanBtn = RetryFind(() => w.FindFirstDescendant(cf =>
+                cf.ByName("扫描占用").And(cf.ByControlType(ControlType.Button))), 8000);
+            if (scanBtn != null) { Trigger(scanBtn); Console.WriteLine("[cslimscan] 扫描已开始"); }
+            else { Console.WriteLine("[cslimscan] 未找到扫描按钮"); return failures + 1; }
+            var sw = Stopwatch.StartNew();
+            bool doneScan = false;
+            while (sw.Elapsed < TimeSpan.FromMinutes(15))
+            {
+                Thread.Sleep(8000);
+                if (FindTextStarting(w, "扫描完成") != null) { doneScan = true; break; }
+                if (FindTextStarting(w, "扫描失败") != null || FindTextStarting(w, "扫描已取消") != null) break;
+            }
+            Console.WriteLine($"[cslimscan] 扫描状态: {(doneScan ? "完成" : "未完成")},耗时 {sw.Elapsed:mm\\:ss}");
+            Thread.Sleep(2000);
+            var wb = w.BoundingRectangle;
+            using var bmp = new System.Drawing.Bitmap((int)wb.Width, (int)wb.Height);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+                g.CopyFromScreen((int)wb.X, (int)wb.Y, 0, 0, bmp.Size);
+            var path = @"C:\Users\jerry\Desktop\memory\artifacts\storeshots\4-cslim.png";
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            Console.WriteLine($"[cslimscan] 已截图 -> {path}");
+            SetWindowPos(hwndS, (IntPtr)(-2), 0, 0, 0, 0, 0x0003);
+        }
+        return failures;
+    }
+    if (mode.StartsWith("reshot"))
+    {
+        // 商店截图重拍:置顶后截指定页。用法: reshot:进程:2-processes.png
+        var parts = mode.Split(':');
+        var pageName = parts.Length > 1 ? parts[1] : "进程";
+        var fileName = parts.Length > 2 ? parts[2] : "reshot.png";
+        if (Process.GetProcessesByName("AiMemoryManager").Length == 0)
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+            Thread.Sleep(6000);
+        }
+        var (a, w) = Attach();
+        using (a)
+        {
+            var hwndS = (IntPtr)w.Properties.NativeWindowHandle;
+            ShowWindow(hwndS, 9);
+            Thread.Sleep(600);
+            SetWindowPos(hwndS, (IntPtr)(-1), 0, 30, 1440, 900, 0);
+            ForceForeground(hwndS);
+            Thread.Sleep(800);
+            NavTo(w, pageName);
+            Thread.Sleep(4000);
+            var wb = w.BoundingRectangle;
+            using var bmp = new System.Drawing.Bitmap((int)wb.Width, (int)wb.Height);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+                g.CopyFromScreen((int)wb.X, (int)wb.Y, 0, 0, bmp.Size);
+            var path = Path.Combine(@"C:\Users\jerry\Desktop\memory\artifacts\storeshots", fileName);
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            Console.WriteLine($"[reshot] {pageName} -> {path}");
+            SetWindowPos(hwndS, (IntPtr)(-2), 0, 0, 0, 0, 0x0003);
+        }
+        return failures;
+    }
     if (mode == "proberestore")
     {
         // 诊断:后悔药「恢复」按钮的 enabled/Invoke 行为与 StatusText 变化
