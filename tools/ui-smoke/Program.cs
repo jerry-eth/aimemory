@@ -3078,6 +3078,93 @@ void CloseStuckDialogs()
         }
         return failures;
     }
+    if (mode == "storeshots")
+    {
+        // 商店素材截图:全程置顶挪到干净区域;先后台启动 C 盘扫描(约10分钟),
+        // 期间触发智能分析并截 仪表盘/进程/设置,最后截 智能分析/C盘瘦身 结果页。
+        if (Process.GetProcessesByName("AiMemoryManager").Length == 0)
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{ExePath()}\"") { UseShellExecute = true });
+            Thread.Sleep(6000);
+        }
+        var (a, w) = Attach();
+        using (a)
+        {
+            var hwndS = (IntPtr)w.Properties.NativeWindowHandle;
+            ShowWindow(hwndS, 9);
+            Thread.Sleep(600);
+            SetWindowPos(hwndS, (IntPtr)(-1), 0, 30, 1440, 900, 0);   // 置顶+定位
+            ForceForeground(hwndS);
+            Thread.Sleep(800);
+
+            void Shot(string page, string file)
+            {
+                NavTo(w, page);
+                Thread.Sleep(3000);
+                var wb = w.BoundingRectangle;
+                using var bmp = new System.Drawing.Bitmap((int)wb.Width, (int)wb.Height);
+                using (var g = System.Drawing.Graphics.FromImage(bmp))
+                    g.CopyFromScreen((int)wb.X, (int)wb.Y, 0, 0, bmp.Size);
+                var path = Path.Combine(@"C:\Users\jerry\Desktop\memory\artifacts\storeshots", file);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+                Console.WriteLine($"[shot] {page} -> {path}");
+            }
+
+            // 1) 先启动 C 盘扫描(后台跑)
+            NavTo(w, "C 盘瘦身");
+            Thread.Sleep(3000);
+            var scanBtn = RetryFind(() => w.FindFirstDescendant(cf =>
+                cf.ByName("扫描占用").And(cf.ByControlType(ControlType.Button))), 8000);
+            if (scanBtn != null) { Trigger(scanBtn); Console.WriteLine("[storeshots] C盘扫描已开始(后台)"); }
+            else Console.WriteLine("[storeshots] 未找到扫描按钮,跳过扫描");
+
+            // 2) 触发智能分析(真实 LLM,已配置档案)
+            NavTo(w, "智能分析");
+            Thread.Sleep(3000);
+            var runBtn = RetryFind(() => w.FindFirstDescendant(cf =>
+                cf.ByName("开始分析").And(cf.ByControlType(ControlType.Button))), 6000);
+            if (runBtn != null) { Trigger(runBtn); Console.WriteLine("[storeshots] 智能分析已开始(后台)"); }
+            else Console.WriteLine("[storeshots] 未找到开始分析按钮,跳过分析");
+
+            // 3) 等待期间截静态页
+            Shot("仪表盘", "1-dashboard.png");
+            Shot("进程", "2-processes.png");
+            Shot("设置", "5-settings.png");
+
+            // 4) 等智能分析完成(最长 5 分钟),截分析页
+            var swAi = Stopwatch.StartNew();
+            bool aiDone = false;
+            while (swAi.Elapsed < TimeSpan.FromMinutes(5))
+            {
+                NavTo(w, "智能分析");
+                Thread.Sleep(2000);
+                if (FindTextStarting(w, "分析报告") != null || FindTextStarting(w, "分析完成") != null
+                    || w.FindFirstDescendant(cf => cf.ByName("强制刷新")) != null)
+                { aiDone = true; break; }
+                Thread.Sleep(5000);
+            }
+            Console.WriteLine($"[storeshots] 智能分析状态: {(aiDone ? "完成" : "超时/进行中")}");
+            Shot("智能分析", "3-analysis.png");
+
+            // 5) 等 C 盘扫描完成(总上限 15 分钟),截瘦身页
+            var swScan = Stopwatch.StartNew();
+            bool scanDone = false;
+            while (swScan.Elapsed < TimeSpan.FromMinutes(15))
+            {
+                NavTo(w, "C 盘瘦身");
+                Thread.Sleep(2000);
+                if (FindTextStarting(w, "扫描完成") != null) { scanDone = true; break; }
+                if (FindTextStarting(w, "扫描失败") != null || FindTextStarting(w, "扫描已取消") != null) break;
+                Thread.Sleep(8000);
+            }
+            Console.WriteLine($"[storeshots] 扫描状态: {(scanDone ? "完成" : "未完成")}");
+            Shot("C 盘瘦身", "4-cslim.png");
+
+            SetWindowPos(hwndS, (IntPtr)(-2), 0, 0, 0, 0, 0x0003);   // 取消置顶
+        }
+        return failures;
+    }
     if (mode == "proberestore")
     {
         // 诊断:后悔药「恢复」按钮的 enabled/Invoke 行为与 StatusText 变化
