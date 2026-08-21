@@ -349,7 +349,7 @@ public partial class ProcessesViewModel : ObservableObject, IDisposable
     private bool CanTerminateSelected() => Items.Any(i => i.IsSelected && i.CanKill);
 
     [RelayCommand]
-    private void RestoreAsync(KillRecord? record)
+    private void Restore(KillRecord? record)
     {
         if (record == null) return;
         try

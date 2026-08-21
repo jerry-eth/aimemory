@@ -3010,6 +3010,74 @@ void CloseStuckDialogs()
         }
         return failures;
     }
+    if (mode == "prober2")
+    {
+        // 恢复按钮排障第二步:挪到干净区域+置顶,截图确认真的在最前,再依次 真点/空格/Invoke
+        var (a, w) = Attach();
+        using (a)
+        {
+            var hwnd2 = (IntPtr)w.Properties.NativeWindowHandle;
+            ShowWindow(hwnd2, 9);   // SW_RESTORE
+            Thread.Sleep(500);
+            NavTo(w, "进程");
+            Thread.Sleep(2500);
+            // 挪到左上角干净区并置顶(不移除,测完才移除)
+            SetWindowPos(hwnd2, (IntPtr)(-1), 0, 40, 1400, 900, 0);
+            ForceForeground(hwnd2);
+            Thread.Sleep(800);
+            using (var bmp = new System.Drawing.Bitmap(1400, 900))
+            {
+                using (var g = System.Drawing.Graphics.FromImage(bmp))
+                    g.CopyFromScreen(0, 40, 0, 0, bmp.Size);
+                bmp.Save(@"C:\Users\jerry\Desktop\memory\artifacts\prober2-front.png");
+            }
+            Console.WriteLine("[probe] 已截图 prober2-front.png");
+            var btns = w.FindAllDescendants(cf => cf.ByName("恢复").And(cf.ByControlType(ControlType.Button)));
+            Console.WriteLine($"[probe] 恢复按钮数: {btns.Length}");
+            if (btns.Length == 0) return failures;
+            var b1 = btns[0];
+            var c = b1.BoundingRectangle;
+            Console.WriteLine($"[probe] 目标按钮 rect={c} enabled={b1.IsEnabled}");
+            try
+            {
+                var hit = a.FromPoint(new System.Drawing.Point((int)(c.X + c.Width / 2), (int)(c.Y + c.Height / 2)));
+                Console.WriteLine($"[probe] FromPoint: [{hit.ControlType}]'{hit.Name}' pid={hit.Properties.ProcessId.ValueOrDefault} class={hit.ClassName}");
+            }
+            catch (Exception ex) { Console.WriteLine("[probe] FromPoint 抛: " + ex.Message); }
+            // 1) 真实点击
+            try { b1.Click(); Console.WriteLine("[probe] Click 未抛异常"); }
+            catch (Exception ex) { Console.WriteLine("[probe] Click 抛: " + ex.Message); }
+            Thread.Sleep(1500);
+            Console.WriteLine("[probe] Click 后 uismokel3 进程数: " + System.Diagnostics.Process.GetProcessesByName("uismokel3").Length);
+            // 2) 键盘空格
+            try
+            {
+                b1.Focus();
+                Thread.Sleep(400);
+                FlaUI.Core.Input.Keyboard.Press(FlaUI.Core.WindowsAPI.VirtualKeyShort.SPACE);
+                Console.WriteLine("[probe] Space 已按");
+            }
+            catch (Exception ex) { Console.WriteLine("[probe] Space 抛: " + ex.Message); }
+            Thread.Sleep(1500);
+            Console.WriteLine("[probe] Space 后 uismokel3 进程数: " + System.Diagnostics.Process.GetProcessesByName("uismokel3").Length);
+            // 3) UIA Invoke
+            try { b1.Patterns.Invoke.Pattern.Invoke(); Console.WriteLine("[probe] Invoke 未抛异常"); }
+            catch (Exception ex) { Console.WriteLine("[probe] Invoke 抛: " + ex.Message); }
+            Thread.Sleep(1500);
+            Console.WriteLine("[probe] Invoke 后 uismokel3 进程数: " + System.Diagnostics.Process.GetProcessesByName("uismokel3").Length);
+            foreach (var t in w.FindAllDescendants(cf => cf.ByControlType(ControlType.Text)))
+            {
+                try
+                {
+                    if (t.Name.Contains("已重新启动") || t.Name.Contains("恢复失败"))
+                        Console.WriteLine("[probe] 状态文本: " + t.Name);
+                }
+                catch { }
+            }
+            SetWindowPos(hwnd2, (IntPtr)(-2), 0, 0, 0, 0, 0x0003);   // 取消置顶
+        }
+        return failures;
+    }
     if (mode == "proberestore")
     {
         // 诊断:后悔药「恢复」按钮的 enabled/Invoke 行为与 StatusText 变化
@@ -3073,6 +3141,16 @@ void CloseStuckDialogs()
                     ForceForeground(hwndP);
                     SetWindowPos(hwndP, (IntPtr)(-1), 0, 0, 0, 0, 0x0003);
                     Thread.Sleep(300);
+                    // 命中测试:按钮中心点在 UIA 里属于谁(检测是否有透明遮挡层)
+                    try
+                    {
+                        var c = b1.BoundingRectangle;
+                        var hit = a.FromPoint(new System.Drawing.Point(
+                            (int)(c.X + c.Width / 2), (int)(c.Y + c.Height / 2)));
+                        Console.WriteLine($"[probe] FromPoint 命中: [{hit.ControlType}]'{hit.Name}'({hit.ClassName})");
+                        Console.WriteLine($"[probe] 命中详情: pid={hit.Properties.ProcessId.ValueOrDefault} hwnd={hit.Properties.NativeWindowHandle.ValueOrDefault} rect={hit.BoundingRectangle} framework={hit.Properties.FrameworkId.ValueOrDefault}");
+                    }
+                    catch (Exception ex) { Console.WriteLine("[probe] FromPoint 抛: " + ex.Message); }
                     try { b1.Click(); Console.WriteLine("[probe] Click 未抛异常"); }
                     catch (Exception ex) { Console.WriteLine("[probe] Click 抛: " + ex.GetType().Name + " " + ex.Message); }
                     finally { SetWindowPos(hwndP, (IntPtr)(-2), 0, 0, 0, 0, 0x0003); }
