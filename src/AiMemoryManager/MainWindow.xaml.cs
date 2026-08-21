@@ -32,7 +32,12 @@ public partial class MainWindow : FluentWindow
             RootNavigation.Navigate(typeof(DashboardPage)); // 初始页
             // 首次采样可能早于订阅,用最近一次采样(或 0)先渲染一次托盘图标
             UpdateTray(Locator.Monitor.RecentPercents.LastOrDefault());
+            CapPageScrollViewerDeferred();
         };
+        RootNavigation.Navigated += (_, _) => CapPageScrollViewerDeferred();
+        SizeChanged += (_, _) => CapPageScrollViewerDeferred();
+
+        // Sampled 在线程池线程触发,先切回 UI 线程再更新托盘
 
         // Sampled 在线程池线程触发,先切回 UI 线程再更新托盘
         Locator.Monitor.Sampled += (_, info) =>
@@ -76,6 +81,52 @@ public partial class MainWindow : FluentWindow
                         H.NotifyIcon.Core.NotificationIcon.Error);
             }
         });
+    }
+
+    /// <summary>
+    /// WPF-UI 4.3 的 NavigationView 内容宿主是 DynamicScrollViewer:它按无限高度测量页面,
+    /// 页面根 ScrollViewer 因此铺满内容、自身视口=内容、永不滚动,宿主则用自动隐藏的
+    /// DynamicScrollBar 滚动——用户看不到「下面还有内容」,超高页面(大模型/白名单/C盘瘦身)
+    /// 底部内容显示不全。这里把当前页根 ScrollViewer 的高度封顶到宿主视口高度:
+    /// 页面改用标准 WPF 滚动条(需要时常驻可见、可拖拽、滚轮原生支持),
+    /// 宿主滚动条因内容高度≤视口自动消失。
+    /// </summary>
+    /// <summary>导航/尺寸变化事件触发时页面可视树可能尚未排版完成,推迟到 Render 再封顶。</summary>
+    private void CapPageScrollViewerDeferred()
+    {
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render,
+            new Action(() =>
+            {
+                CapPageScrollViewer();
+                // Render 时机仍可能早于新页排版(导航动画),拿不到有效视口高就再补一轮
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle,
+                    new Action(CapPageScrollViewer));
+            }));
+    }
+
+    private void CapPageScrollViewer()
+    {
+        var presenter = FindVisualChild<NavigationViewContentPresenter>(RootNavigation);
+        if (presenter == null) return;
+        var host = FindVisualChild<ScrollViewer>(presenter);
+        var page = FindVisualChild<Page>(presenter);
+        if (host == null || page == null) return;
+        // 只封顶页面的「根」ScrollViewer;页面内部的 ListView/DataGrid 滚动容器各有自己的
+        // MaxHeight(如后悔药列表 160),误封顶会把它们撑大。进程页根是 Grid,不在此处理
+        if (page.Content is ScrollViewer pageScroller && host.ViewportHeight > 100)
+            pageScroller.MaxHeight = host.ViewportHeight;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            var found = FindVisualChild<T>(child);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private void OnPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)

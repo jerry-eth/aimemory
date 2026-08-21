@@ -22,6 +22,8 @@
             <Setter Property="TextWrapping" Value="NoWrap"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Padding" Value="8,0"/>
+            <!-- 列宽有限长路径必然截断,悬停显示完整内容 -->
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}"/>
         </Style>
         <Style TargetType="DataGridCell">
             <Setter Property="Padding" Value="0"/>
@@ -48,8 +50,10 @@
             <Setter Property="EnableColumnVirtualization" Value="True"/>
             <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
             <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+            <!-- 显式允许拖表头分隔条调列宽(默认即 true,写出来防主题覆盖) -->
+            <Setter Property="CanUserResizeColumns" Value="True"/>
         </Style>
-        <!-- 勾选列模板:两张建议表共用 -->
+        <!-- 勾选列模板:两张建议表共用。列宽曾实测被压到 20px 勾选框只显示一半,MinWidth 保底 -->
         <DataTemplate x:Key="SelectCell">
             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -112,7 +116,7 @@
                     <DataGrid Style="{StaticResource SlimGrid}" ItemsSource="{Binding Cleanable}"
                               MaxHeight="240" MinHeight="48" Margin="0,8,0,0">
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Width="40" CellTemplate="{StaticResource SelectCell}"/>
+                            <DataGridTemplateColumn Width="48" MinWidth="48" CanUserResize="False" CellTemplate="{StaticResource SelectCell}"/>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
                                                 Binding="{Binding Path}" Width="3*" MinWidth="280" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Reason], Source={x:Static services:Locator.L10n}}"
@@ -134,7 +138,7 @@
                     <DataGrid Style="{StaticResource SlimGrid}" ItemsSource="{Binding Migratable}"
                               MaxHeight="240" MinHeight="48" Margin="0,8,0,0">
                         <DataGrid.Columns>
-                            <DataGridTemplateColumn Width="40" CellTemplate="{StaticResource SelectCell}"/>
+                            <DataGridTemplateColumn Width="48" MinWidth="48" CanUserResize="False" CellTemplate="{StaticResource SelectCell}"/>
                             <DataGridTextColumn Header="{Binding [Processes.Col.Path], Source={x:Static services:Locator.L10n}}"
                                                 Binding="{Binding Path}" Width="3*" MinWidth="280" ElementStyle="{StaticResource SlimCellText}"/>
                             <DataGridTextColumn Header="{Binding [Slim.Reason], Source={x:Static services:Locator.L10n}}"

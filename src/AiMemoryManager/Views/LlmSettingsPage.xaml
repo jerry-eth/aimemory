@@ -166,7 +166,7 @@
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ui:NumberBox Value="{Binding LlmDailyCallCap, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="1" Maximum="100" SmallChange="1" LargeChange="5"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150"/>
                     </StackPanel>
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
@@ -180,7 +180,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <ui:NumberBox Value="{Binding LlmTimerIntervalHours, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="1" Maximum="168" SmallChange="1" LargeChange="6"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <TextBlock Text="{Binding [Llm.Budget], Source={x:Static services:Locator.L10n}}"
@@ -210,14 +210,14 @@
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ui:NumberBox Value="{Binding LeakGrowthThresholdMb, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="50" Maximum="10000" SmallChange="50" LargeChange="200"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <TextBlock Text="{Binding [Leak.WindowMin], Source={x:Static services:Locator.L10n}}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <ui:NumberBox Value="{Binding LeakWindowMinutes, UpdateSourceTrigger=PropertyChanged}"
                                       Minimum="5" Maximum="120" SmallChange="5" LargeChange="15"
-                                      SpinButtonPlacementMode="Inline" Width="110"/>
+                                      SpinButtonPlacementMode="Inline" Width="150"/>
                     </StackPanel>
                 </StackPanel>
             </ui:Card>

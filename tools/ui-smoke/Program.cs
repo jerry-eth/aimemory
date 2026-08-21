@@ -2873,6 +2873,128 @@ void CloseStuckDialogs()
         }
         return failures;
     }
+    if (mode == "gridprobe")
+    {
+        // 打印指定页每个 DataGrid 的表头列宽,验证勾选列不被压扁
+        var (a, w) = Attach();
+        using (a)
+        {
+            NavTo(w, args.Length > 1 ? args[1] : "C 盘瘦身");
+            Thread.Sleep(2500);
+            foreach (var g in w.FindAllDescendants(cf => cf.ByControlType(ControlType.DataGrid)))
+            {
+                var heads = g.FindAllDescendants(cf => cf.ByControlType(ControlType.HeaderItem));
+                Console.WriteLine($"[grid] @ {g.BoundingRectangle} 列数={heads.Length}: "
+                    + string.Join(", ", heads.Select(h => $"'{h.Name}' w={h.BoundingRectangle.Width:0}")));
+            }
+        }
+        return failures;
+    }
+    if (mode == "wheeltest")
+    {
+        // 在页面中部滚轮下滚,看内容是否移动(验证外层 DynamicScrollViewer 是否可滚)
+        var (a, w) = Attach();
+        using (a)
+        {
+            ShowWindow((IntPtr)w.Properties.NativeWindowHandle, 3);
+            Thread.Sleep(800);
+            NavTo(w, args.Length > 1 ? args[1] : "大模型");
+            Thread.Sleep(2500);
+            var wb = w.BoundingRectangle;
+            FlaUI.Core.Input.Mouse.MoveTo((int)(wb.X + wb.Width * 0.6), (int)(wb.Y + wb.Height * 0.5));
+            Thread.Sleep(300);
+            for (int i = 0; i < 10; i++) { FlaUI.Core.Input.Mouse.Scroll(-3); Thread.Sleep(150); }
+            Thread.Sleep(1000);
+            var leak = w.FindAllDescendants(cf => cf.ByControlType(ControlType.Text))
+                .FirstOrDefault(e => e.Name.Contains("泄漏检测"));
+            Console.WriteLine($"[wheel] 滚动后「泄漏检测」位置: {(leak == null ? "找不到" : leak.BoundingRectangle.ToString())} (窗口下={wb.Bottom})");
+            try
+            {
+                using var bmp = new System.Drawing.Bitmap((int)wb.Width, (int)wb.Height);
+                using (var g = System.Drawing.Graphics.FromImage(bmp))
+                    g.CopyFromScreen((int)wb.X, (int)wb.Y, 0, 0, bmp.Size);
+                var shot = @"C:\Users\jerry\Desktop\memory\artifacts\wheel-大模型.png";
+                bmp.Save(shot, System.Drawing.Imaging.ImageFormat.Png);
+                Console.WriteLine("[wheel] 截图: " + shot);
+            }
+            catch (Exception ex) { Console.WriteLine("[wheel] 截图失败: " + ex.Message); }
+        }
+        return failures;
+    }
+    if (mode == "scrollprobe")
+    {
+        // 列出窗口内所有支持 ScrollPattern 的元素 + 所有 ScrollBar,定位到底谁该滚动
+        var (a, w) = Attach();
+        using (a)
+        {
+            if (args.Length > 1) { NavTo(w, args[1]); Thread.Sleep(2500); }
+            foreach (var e in w.FindAllDescendants())
+            {
+                try
+                {
+                    bool hasScroll = e.Patterns.Scroll.IsSupported;
+                    bool isBar = e.ControlType == ControlType.ScrollBar;
+                    if (!hasScroll && !isBar) continue;
+                    var nm = e.Name ?? "";
+                    if (nm.Length > 30) nm = nm[..30] + "…";
+                    if (hasScroll)
+                    {
+                        var sp = e.Patterns.Scroll.Pattern;
+                        Console.WriteLine($"[scroll] [{e.ControlType}] '{nm}' class={e.ClassName} @ {e.BoundingRectangle} " +
+                            $"vScrollable={sp.VerticallyScrollable.ValueOrDefault} v%={sp.VerticalScrollPercent.ValueOrDefault:0} " +
+                            $"vView={sp.VerticalViewSize.ValueOrDefault:0}");
+                    }
+                    else Console.WriteLine($"[bar] '{nm}' class={e.ClassName} @ {e.BoundingRectangle}");
+                }
+                catch { }
+            }
+        }
+        return failures;
+    }
+    if (mode == "layoutaudit")
+    {
+        // 逐页截图 + 报告超出窗口右边/下边界的元素(显示不全诊断)
+        var (a, w) = Attach();
+        using (a)
+        {
+            ShowWindow((IntPtr)w.Properties.NativeWindowHandle, 3);
+            Thread.Sleep(800);
+            var pages = new[] { "仪表盘", "进程", "规则", "智能分析", "大模型", "C 盘瘦身", "Token 统计", "白名单", "设置" };
+            foreach (var page in pages)
+            {
+                NavTo(w, page);
+                Thread.Sleep(2500);
+                var wb = w.BoundingRectangle;
+                try
+                {
+                    using var bmp = new System.Drawing.Bitmap((int)wb.Width, (int)wb.Height);
+                    using (var g = System.Drawing.Graphics.FromImage(bmp))
+                        g.CopyFromScreen((int)wb.X, (int)wb.Y, 0, 0, bmp.Size);
+                    var shot = Path.Combine(@"C:\Users\jerry\Desktop\memory\artifacts",
+                        "layout-" + page.Replace(" ", "") + ".png");
+                    bmp.Save(shot, System.Drawing.Imaging.ImageFormat.Png);
+                    Console.WriteLine($"[shot] {page}: {shot}");
+                }
+                catch (Exception ex) { Console.WriteLine($"[shot] {page} 截图失败: {ex.Message}"); }
+                // 越界元素:右/下边缘超出窗口客户区,或矩形在窗口外但 UIA 声称可见
+                foreach (var e in w.FindAllDescendants())
+                {
+                    try
+                    {
+                        var r = e.BoundingRectangle;
+                        if (r.IsEmpty || (r.Width == 0 && r.Height == 0)) continue;
+                        bool clipR = r.Right > wb.Right + 1, clipB = r.Bottom > wb.Bottom + 1;
+                        if (!clipR && !clipB) continue;
+                        var nm = e.Name ?? "";
+                        if (nm.Length > 40) nm = nm[..40] + "…";
+                        Console.WriteLine($"[clip] {page}: [{e.ControlType}] '{nm}' @ {r} (窗口右={wb.Right} 下={wb.Bottom})");
+                    }
+                    catch { }
+                }
+            }
+        }
+        return failures;
+    }
     if (mode == "dumpedits")
     {
         // 列出指定页面的全部 Edit 控件(含无名),诊断输入框查找
