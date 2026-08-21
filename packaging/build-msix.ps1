@@ -1,9 +1,10 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+\.\d+$')]
     [string]$Version = '1.0.0.0',
-    [string]$Publisher = 'CN=AiMemoryManager',
-    [string]$IdentityName = 'AiMemoryManager',
+    # 默认值为 Partner Center 分配的正式身份(产品 ID 9NX4FZFXT5ZM,PFN yklh.AI_vrrw0cp0z2cfg)
+    [string]$Publisher = 'CN=314D666A-7A85-4F13-A7D5-0AD3D8A7D3B0',
+    [string]$IdentityName = 'yklh.AI',
     [string]$Configuration = 'Release',
     [ValidateSet('win-x64','win-arm64')]
     [string]$Runtime = 'win-x64',
@@ -63,7 +64,7 @@ $manifest = [IO.File]::ReadAllText($manifestPath)
 $identityReplacement = 'Name="{0}" Publisher="{1}" Version="{2}"' -f `
     $IdentityName, $Publisher, $Version
 $manifest = $manifest.Replace(
-    'Name="AiMemoryManager" Publisher="CN=AiMemoryManager" Version="1.0.0.0"',
+    'Name="yklh.AI" Publisher="CN=314D666A-7A85-4F13-A7D5-0AD3D8A7D3B0" Version="1.0.0.0"',
     $identityReplacement)
 [IO.File]::WriteAllText($manifestPath, $manifest, [Text.UTF8Encoding]::new($false))
 

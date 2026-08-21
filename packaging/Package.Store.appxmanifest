@@ -5,10 +5,10 @@
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap desktop rescap">
-  <Identity Name="AiMemoryManager" Publisher="CN=AiMemoryManager" Version="1.0.0.0" ProcessorArchitecture="x64" />
+  <Identity Name="yklh.AI" Publisher="CN=314D666A-7A85-4F13-A7D5-0AD3D8A7D3B0" Version="1.0.0.0" ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>AI 内存管家</DisplayName>
-    <PublisherDisplayName>AiMemoryManager</PublisherDisplayName>
+    <PublisherDisplayName>yklh</PublisherDisplayName>
     <Description>本地 Windows 内存监控、清理和可选的大模型分析工具。</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
