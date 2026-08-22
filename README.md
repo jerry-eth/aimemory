@@ -28,6 +28,12 @@ dotnet test .\AiMemoryManager.sln --configuration Release
 dotnet run --project .\src\AiMemoryManager\AiMemoryManager.csproj
 ```
 
+## 直接下载（免构建）
+
+不想自己构建的用户可直接从 GitHub Releases 下载免安装便携版（解压即用，无需证书、无需预装 .NET 8）：
+
+https://github.com/jerry-eth/aimemory/releases
+
 ## 生成无需证书的便携版
 
 ```powershell
