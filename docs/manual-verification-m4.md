@@ -35,7 +35,7 @@
 - [x] 已准备隐私政策初稿，说明 BYOK 数据传输、DPAPI、遥测、提权和第三方服务责任。
 - [x] 采集五张截图：仪表盘、进程、智能分析、C 盘瘦身、设置。（2026-08-21 本机采集于 `artifacts/storeshots/`，已对用户目录路径打马赛克脱敏；干净环境重采可在过审后随意愿更新）
 - [x] 将隐私政策中的运营主体、联系邮箱和 HTTPS 公开地址替换为真实信息。（运营主体 yklh（个人开发者）、li_snow@qq.com，已发布至 https://jerry-eth.github.io/aimemory/privacy-policy.html ）
-- [x] 在 Partner Center 填写年龄分级、隐私政策地址、能力说明和商店素材。（2026-08-21 提交 1152921505701713636 六个分区全部「完成」：定价免费/CNY/全球、属性（实用工具+工具/隐私声明+URL/生成式AI声明）、IARC 年龄分级、MSIX 包已 Validated+Desktop 设备族、zh-CN 与 en-US 双语一览各 5 张截图、runFullTrust 说明、认证说明；最终「提交进行认证」按钮留给用户手动点击）
+- [x] 在 Partner Center 填写年龄分级、隐私政策地址、能力说明和商店素材。（2026-08-22 提交 1152921505701713636 六分区全部完成后**已点击「提交进行认证」，状态「正在认证」**：定价免费/CNY/全球、属性（实用工具+工具/隐私声明+URL/生成式AI声明）、IARC 年龄分级 3+/Everyone、MSIX 包已 Validated+Desktop 设备族、zh-CN 与 en-US 双语一览各 5 张截图、runFullTrust 说明、认证说明；IARC 证书 ID 待定，认证结果邮件发至 li_snow@qq.com）
 
 ## 5. 自动化证据
 
